@@ -18,19 +18,11 @@ const screenBtn = document.getElementById('screen-btn');
 const stopShareBtn = document.getElementById('stop-share-btn');
 const leaveBtn = document.getElementById('leave-btn');
 const copyLinkBtn = document.getElementById('copy-link-btn');
-const settingsBtn = document.getElementById('settings-btn');
-const settingsModal = document.getElementById('settings-modal');
-const closeModalBtn = document.querySelector('.close-modal');
-const applySettingsBtn = document.getElementById('apply-settings-btn');
-const qualitySelect = document.getElementById('quality-select');
-const fpsSelect = document.getElementById('fps-select');
 
 let localStream;
 let peerConnection;
 let roomId;
 let isScreenSharing = false;
-let currentQuality = 'medium';
-let currentFps = 30;
 let currentScreenStream;
 
 const rtcConfig = {
@@ -136,23 +128,6 @@ function updateButtonStates() {
     }
 }
 
-async function replaceVideoTrack() {
-    if (!peerConnection || !localStream) return;
-
-    const videoTrack = localStream.getVideoTracks()[0];
-    const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-
-    if (sender) {
-        try {
-            await sender.replaceTrack(videoTrack);
-            showToast('Video settings applied', 'success');
-        } catch (err) {
-            console.error('Error replacing track:', err);
-            showToast('Failed to apply settings', 'error');
-        }
-    }
-}
-
 // --- Initialization ---
 
 // Check for room in URL
@@ -193,31 +168,6 @@ copyLinkBtn.addEventListener('click', () => {
     }).catch(err => {
         showToast('Failed to copy link', 'error');
     });
-});
-
-// Settings Modal
-settingsBtn.addEventListener('click', () => settingsModal.classList.add('active'));
-closeModalBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
-settingsModal.addEventListener('click', (e) => {
-    if (e.target === settingsModal) settingsModal.classList.remove('active');
-});
-
-applySettingsBtn.addEventListener('click', async () => {
-    currentQuality = qualitySelect.value;
-    currentFps = fpsSelect.value;
-
-    if (!isScreenSharing) {
-        const success = await startLocalStream();
-        if (success) {
-            await replaceVideoTrack();
-            // Restore mute/camera state logic if needed, but for now we assume reset
-            // Or better: check previous state
-            // Simplified for now: just apply new stream
-        }
-    } else {
-        showToast('Cannot change quality while screen sharing', 'error');
-    }
-    settingsModal.classList.remove('active');
 });
 
 // --- WebRTC Logic ---
