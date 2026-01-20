@@ -679,6 +679,25 @@ video {
     bottom: 80px;
 }
 
+/* Sound Menu specific override if needed */
+.sound-menu {
+    /* reuse reaction-menu styles */
+}
+
+/* Auto-Hide UI */
+.hide-ui .room-header,
+.hide-ui .controls-bar,
+.hide-ui .video-overlay,
+.hide-ui .icon-btn {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.hide-ui {
+    cursor: none; /* Hide cursor */
+}
+
 .reaction-menu span {
     font-size: 1.5rem;
     cursor: pointer;

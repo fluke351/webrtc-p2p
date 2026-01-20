@@ -748,4 +748,155 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 5. Sound Effects (Soundboard) with AudioContext
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const soundBtn = document.getElementById('sound-btn');
+    const soundMenu = document.querySelector('.sound-menu');
+
+    soundBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        soundMenu.classList.toggle('show');
+        soundBtn.classList.toggle('active');
+        // Close other menus
+        reactionMenu.classList.remove('show');
+        reactionBtn.classList.remove('active');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!soundBtn.contains(e.target) && !soundMenu.contains(e.target)) {
+            soundMenu.classList.remove('show');
+            soundBtn.classList.remove('active');
+        }
+    });
+
+    document.querySelectorAll('.sound-menu span').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const soundId = btn.dataset.sound;
+            playSound(soundId);
+            socket.emit('play-sound', soundId);
+        });
+    });
+
+    socket.on('play-sound', (soundId) => {
+        playSound(soundId);
+        showToast(`Sound effect: ${soundId}`, 'info');
+    });
+
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+
+        if (type === 'clap') {
+            // White noise burst
+            const bufferSize = audioCtx.sampleRate * 0.1; // 0.1 sec
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const noiseGain = audioCtx.createGain();
+            noise.connect(noiseGain);
+            noiseGain.connect(audioCtx.destination);
+            noiseGain.gain.setValueAtTime(1, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            noise.start(now);
+        } else if (type === 'laugh') {
+            // Series of oscillating pitches
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(400, now);
+            osc.frequency.linearRampToValueAtTime(300, now + 0.1);
+            osc.frequency.linearRampToValueAtTime(400, now + 0.2);
+            osc.frequency.linearRampToValueAtTime(300, now + 0.3);
+            gainNode.gain.setValueAtTime(0.5, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            osc.start(now);
+            osc.stop(now + 0.5);
+        } else if (type === 'drum') {
+            // Low freq kick
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
+            gainNode.gain.setValueAtTime(1, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            osc.start(now);
+            osc.stop(now + 0.5);
+        } else if (type === 'horn') {
+            // Air hornish (sawtooth)
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.linearRampToValueAtTime(250, now + 0.5);
+            gainNode.gain.setValueAtTime(0.5, now);
+            gainNode.gain.linearRampToValueAtTime(0, now + 0.5);
+            osc.start(now);
+            osc.stop(now + 0.5);
+        }
+    }
+
+    // 6. Auto-Hide Controls (Cinema Mode)
+    let hideTimer;
+    const body = document.body;
+
+    function resetHideTimer() {
+        body.classList.remove('hide-ui');
+        clearTimeout(hideTimer);
+        // Only hide if we are in the room screen
+        if (roomScreen.style.display !== 'none') {
+            hideTimer = setTimeout(() => {
+                body.classList.add('hide-ui');
+            }, 3000); // 3 seconds
+        }
+    }
+
+    document.addEventListener('mousemove', resetHideTimer);
+    document.addEventListener('click', resetHideTimer);
+    document.addEventListener('keydown', resetHideTimer);
+
+    // 7. Connection Status Monitor
+    const pingDisplay = document.getElementById('ping-display');
+    const statusDot = document.querySelector('.status-dot');
+
+    setInterval(async () => {
+        if (!peerConnection || peerConnection.iceConnectionState !== 'connected') {
+            pingDisplay.textContent = '(Offline)';
+            statusDot.style.backgroundColor = '#666';
+            return;
+        }
+
+        try {
+            const stats = await peerConnection.getStats();
+            let rtt = null;
+
+            stats.forEach(report => {
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                    rtt = report.currentRoundTripTime;
+                }
+            });
+
+            if (rtt !== null) {
+                const pingMs = Math.round(rtt * 1000);
+                pingDisplay.textContent = `(${pingMs}ms)`;
+
+                if (pingMs < 100) {
+                    statusDot.style.backgroundColor = '#46d369'; // Green
+                } else if (pingMs < 200) {
+                    statusDot.style.backgroundColor = '#ffc107'; // Yellow
+                } else {
+                    statusDot.style.backgroundColor = '#e50914'; // Red
+                }
+            }
+        } catch (err) {
+            console.warn('Stats error:', err);
+        }
+    }, 2000);
+
 });

@@ -71,6 +71,11 @@ io.on('connection', (socket) => {
         socket.on('reaction', (emoji) => {
             socket.to(roomId).emit('reaction', emoji);
         });
+
+        // Sound Effect Feature
+        socket.on('play-sound', (soundId) => {
+            socket.to(roomId).emit('play-sound', soundId);
+        });
     });
 });
 
