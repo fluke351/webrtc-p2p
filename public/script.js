@@ -380,14 +380,17 @@ screenBtn.addEventListener('click', async () => {
 
         // Replace video track in peer connection sender
         if (peerConnection) {
-            const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+            const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
                 sender.replaceTrack(screenTrack);
             }
+        } else {
+            showToast('Sharing screen (Waiting for peer to join)', 'info');
         }
 
         // Update local video
         localVideo.srcObject = screenStream;
+        currentScreenStream = screenStream; // Store to stop later
 
         screenTrack.onended = () => {
             stopScreenShare();
@@ -419,17 +422,18 @@ function stopScreenShare() {
     if (localStream) {
         const videoTrack = localStream.getVideoTracks()[0];
         if (peerConnection) {
-            const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+            const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
                 sender.replaceTrack(videoTrack);
             }
         }
         localVideo.srcObject = localStream;
 
-        // If the screen stream tracks are still running, stop them
-        // Note: The stream object from getDisplayMedia isn't stored globally in this snippet, 
-        // but typically the track.onended handles it. 
-        // Ideally we should store currentScreenStream to stop it explicitly if button is clicked.
+        // Stop the screen share stream tracks
+        if (currentScreenStream) {
+            currentScreenStream.getTracks().forEach(track => track.stop());
+            currentScreenStream = null;
+        }
     }
 
     isScreenSharing = false;
