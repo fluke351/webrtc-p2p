@@ -68,14 +68,17 @@
             </div>
             <div class="video-wrapper remote placeholder">
                 <div class="waiting-message">
-                    <i class="fas fa-spinner fa-spin"></i>
+                    <i class="fas fa-users"></i>
                     <p>Waiting for someone to join...</p>
                 </div>
                 <div class="camera-off-indicator">
-                    <i class="fas fa-desktop"></i>
-                    <span>Remote Screen</span>
+                    <i class="fas fa-user-circle"></i>
+                    <span>User Connected (Audio Only)</span>
                 </div>
                 <video id="remote-video" autoplay playsinline></video>
+                <button id="expand-btn" class="icon-btn expand-btn" title="Full Screen">
+                    <i class="fas fa-expand"></i>
+                </button>
                 <div class="video-overlay">
                     <span class="user-label">Remote</span>
                     <div class="audio-indicator"><i class="fas fa-microphone"></i></div>

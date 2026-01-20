@@ -6,6 +6,18 @@ const socket = io({
     randomizationFactor: 0.5
 });
 
+expandBtn.addEventListener('click', () => {
+    remoteVideoWrapper.classList.toggle('expanded');
+    const icon = expandBtn.querySelector('i');
+    if (remoteVideoWrapper.classList.contains('expanded')) {
+        icon.className = 'fas fa-compress';
+        expandBtn.title = "Exit Full Screen";
+    } else {
+        icon.className = 'fas fa-expand';
+        expandBtn.title = "Full Screen";
+    }
+});
+
 const localVideo = document.getElementById('local-video');
 const remoteVideo = document.getElementById('remote-video');
 const joinScreen = document.getElementById('join-screen');
@@ -161,6 +173,18 @@ joinBtn.addEventListener('click', async () => {
     }
 });
 
+expandBtn.addEventListener('click', () => {
+    remoteVideoWrapper.classList.toggle('expanded');
+    const icon = expandBtn.querySelector('i');
+    if (remoteVideoWrapper.classList.contains('expanded')) {
+        icon.className = 'fas fa-compress';
+        expandBtn.title = "Exit Full Screen";
+    } else {
+        icon.className = 'fas fa-expand';
+        expandBtn.title = "Full Screen";
+    }
+});
+
 copyLinkBtn.addEventListener('click', () => {
     const link = window.location.href;
     navigator.clipboard.writeText(link).then(() => {
@@ -176,6 +200,7 @@ socket.on('user-connected', async (userId) => {
     console.log('User connected:', userId);
     showToast('User connected', 'info');
     remoteVideoWrapper.classList.remove('placeholder');
+    remoteVideoWrapper.classList.add('camera-off'); // Default to audio-only visual until video track arrives
     createPeerConnection();
 
     if (localStream) {
@@ -381,6 +406,13 @@ screenBtn.addEventListener('click', async () => {
 
         // Notify user
         showToast('Screen sharing started', 'success');
+
+        // Notify remote peer
+        socket.emit('media-state-change', {
+            roomId,
+            type: 'video',
+            enabled: true
+        });
 
     } catch (err) {
         console.error('Error sharing screen:', err);

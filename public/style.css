@@ -202,6 +202,51 @@ input:focus {
     transition: all 0.3s ease;
 }
 
+.video-wrapper.expanded {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+    max-width: none;
+    border-radius: 0;
+}
+
+.video-wrapper.expanded video {
+    object-fit: contain;
+    background-color: #000;
+}
+
+.expand-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: none; /* Only show when video is active */
+}
+
+.video-wrapper:hover .expand-btn {
+    display: block;
+}
+
+/* Hide expand button if waiting or camera off (audio only) */
+.video-wrapper.placeholder .expand-btn,
+.video-wrapper.camera-off .expand-btn {
+    display: none !important;
+}
+
+.expand-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
 .video-wrapper.placeholder {
     display: flex;
     justify-content: center;
@@ -212,12 +257,24 @@ input:focus {
 .waiting-message {
     text-align: center;
     color: var(--text-muted);
+    animation: pulse 2s infinite;
 }
 
 .waiting-message i {
-    font-size: 2rem;
-    margin-bottom: 10px;
+    font-size: 3rem;
+    margin-bottom: 15px;
     color: var(--primary-color);
+}
+
+.waiting-message p {
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
 }
 
 video {
