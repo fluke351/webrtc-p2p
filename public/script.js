@@ -89,13 +89,72 @@ async function startLocalStream() {
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
         }
-        localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        localVideo.srcObject = localStream;
-        return true;
+
+        try {
+            // Try audio and video
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+            console.warn('Could not get audio+video, trying fallbacks...');
+            try {
+                // Try video only
+                localStream = await navigator.mediaDevices.getUserMedia({ ...constraints, audio: false });
+                showToast('Microphone not found. Video only.', 'info');
+            } catch (err2) {
+                try {
+                    // Try audio only
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    showToast('Camera not found. Audio only.', 'info');
+                } catch (err3) {
+                    console.warn('No media devices found.');
+                    localStream = null;
+                    showToast('No devices found. Joining as viewer.', 'info');
+                }
+            }
+        }
+
+        if (localStream) {
+            localVideo.srcObject = localStream;
+            updateButtonStates();
+        } else {
+            // No local stream
+            localVideoWrapper.classList.add('camera-off');
+            localVideoWrapper.classList.add('mic-off');
+            cameraBtn.classList.add('inactive');
+            micBtn.classList.add('inactive');
+        }
+
+        return true; // Always allow joining
     } catch (err) {
         console.error('Error accessing media devices:', err);
-        showToast('Could not access camera/microphone', 'error');
-        return false;
+        showToast('Error initializing media. Joining as viewer.', 'error');
+        return true;
+    }
+}
+
+function updateButtonStates() {
+    if (!localStream) return;
+
+    const videoTrack = localStream.getVideoTracks()[0];
+    const audioTrack = localStream.getAudioTracks()[0];
+
+    if (videoTrack) {
+        cameraBtn.classList.remove('inactive');
+        cameraBtn.classList.add('active');
+        localVideoWrapper.classList.remove('camera-off');
+    } else {
+        cameraBtn.classList.remove('active');
+        cameraBtn.classList.add('inactive');
+        localVideoWrapper.classList.add('camera-off');
+    }
+
+    if (audioTrack) {
+        micBtn.classList.remove('inactive');
+        micBtn.classList.add('active');
+        localVideoWrapper.classList.remove('mic-off');
+    } else {
+        micBtn.classList.remove('active');
+        micBtn.classList.add('inactive');
+        localVideoWrapper.classList.add('mic-off');
     }
 }
 
@@ -191,9 +250,11 @@ socket.on('user-connected', async (userId) => {
     remoteVideoWrapper.classList.remove('placeholder');
     createPeerConnection();
 
-    localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-    });
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+    }
 
     try {
         const offer = await peerConnection.createOffer();
