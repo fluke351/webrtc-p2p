@@ -132,28 +132,49 @@ async function startLocalStream() {
 }
 
 function updateButtonStates() {
-    if (!localStream) return;
+    // Default: disabled if no stream
+    if (!localStream) {
+        cameraBtn.classList.add('disabled');
+        micBtn.classList.add('disabled');
+        localVideoWrapper.classList.add('camera-off');
+        localVideoWrapper.classList.add('mic-off');
+        return;
+    }
 
     const videoTrack = localStream.getVideoTracks()[0];
     const audioTrack = localStream.getAudioTracks()[0];
 
     if (videoTrack) {
-        cameraBtn.classList.remove('inactive');
-        cameraBtn.classList.add('active');
-        localVideoWrapper.classList.remove('camera-off');
+        cameraBtn.classList.remove('disabled');
+        if (videoTrack.enabled) {
+            cameraBtn.classList.remove('inactive');
+            cameraBtn.classList.add('active');
+            localVideoWrapper.classList.remove('camera-off');
+        } else {
+            cameraBtn.classList.remove('active');
+            cameraBtn.classList.add('inactive');
+            localVideoWrapper.classList.add('camera-off');
+        }
     } else {
-        cameraBtn.classList.remove('active');
-        cameraBtn.classList.add('inactive');
+        // No video track -> disable button
+        cameraBtn.classList.add('disabled');
         localVideoWrapper.classList.add('camera-off');
     }
 
     if (audioTrack) {
-        micBtn.classList.remove('inactive');
-        micBtn.classList.add('active');
-        localVideoWrapper.classList.remove('mic-off');
+        micBtn.classList.remove('disabled');
+        if (audioTrack.enabled) {
+            micBtn.classList.remove('inactive');
+            micBtn.classList.add('active');
+            localVideoWrapper.classList.remove('mic-off');
+        } else {
+            micBtn.classList.remove('active');
+            micBtn.classList.add('inactive');
+            localVideoWrapper.classList.add('mic-off');
+        }
     } else {
-        micBtn.classList.remove('active');
-        micBtn.classList.add('inactive');
+        // No audio track -> disable button
+        micBtn.classList.add('disabled');
         localVideoWrapper.classList.add('mic-off');
     }
 }
@@ -375,7 +396,10 @@ socket.on('media-state-change', (payload) => {
 // Controls
 
 cameraBtn.addEventListener('click', () => {
-    if (!localStream) return;
+    if (!localStream) {
+        showToast('No camera found', 'error');
+        return;
+    }
     const videoTrack = localStream.getVideoTracks()[0];
     if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
@@ -397,11 +421,16 @@ cameraBtn.addEventListener('click', () => {
             type: 'video',
             enabled: videoTrack.enabled
         });
+    } else {
+        showToast('No camera available', 'error');
     }
 });
 
 micBtn.addEventListener('click', () => {
-    if (!localStream) return;
+    if (!localStream) {
+        showToast('No microphone found', 'error');
+        return;
+    }
     const audioTrack = localStream.getAudioTracks()[0];
     if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
@@ -423,6 +452,8 @@ micBtn.addEventListener('click', () => {
             type: 'audio',
             enabled: audioTrack.enabled
         });
+    } else {
+        showToast('No microphone available', 'error');
     }
 });
 
