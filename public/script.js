@@ -366,7 +366,7 @@ screenBtn.addEventListener('click', async () => {
 
     try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-            showToast('Screen sharing not supported', 'error');
+            showToast('Screen sharing is not supported on this device/browser.', 'error');
             return;
         }
 
@@ -459,6 +459,13 @@ function stopScreenShare() {
     screenBtn.title = "Share Screen";
     stopShareBtn.style.display = 'none';
     showToast('Screen sharing stopped', 'info');
+
+    // Notify remote peer to turn off video display
+    socket.emit('media-state-change', {
+        roomId,
+        type: 'video',
+        enabled: false
+    });
 }
 
 leaveBtn.addEventListener('click', () => {
