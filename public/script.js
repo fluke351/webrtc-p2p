@@ -12,7 +12,7 @@ const joinScreen = document.getElementById('join-screen');
 const videoGrid = document.getElementById('video-grid');
 const joinBtn = document.getElementById('join-btn');
 const roomInput = document.getElementById('room-input');
-const cameraBtn = document.getElementById('camera-btn');
+// Camera button removed
 const micBtn = document.getElementById('mic-btn');
 const screenBtn = document.getElementById('screen-btn');
 const stopShareBtn = document.getElementById('stop-share-btn');
@@ -31,6 +31,7 @@ let roomId;
 let isScreenSharing = false;
 let currentQuality = 'medium';
 let currentFps = 30;
+let currentScreenStream;
 
 const rtcConfig = {
     iceServers: [
@@ -68,17 +69,8 @@ function showToast(message, type = 'info') {
 }
 
 function getConstraints() {
-    const qualities = {
-        high: { width: { ideal: 1280 }, height: { ideal: 720 } },
-        medium: { width: { ideal: 640 }, height: { ideal: 480 } },
-        low: { width: { ideal: 320 }, height: { ideal: 240 } }
-    };
-
     return {
-        video: {
-            ...qualities[currentQuality],
-            frameRate: { ideal: parseInt(currentFps) }
-        },
+        video: false, // Default to audio only, no camera
         audio: true
     };
 }
@@ -91,35 +83,20 @@ async function startLocalStream() {
         }
 
         try {
-            // Try audio and video
+            // Try audio only
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (err) {
-            console.warn('Could not get audio+video, trying fallbacks...');
-            try {
-                // Try video only
-                localStream = await navigator.mediaDevices.getUserMedia({ ...constraints, audio: false });
-                showToast('Microphone not found. Video only.', 'info');
-            } catch (err2) {
-                try {
-                    // Try audio only
-                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                    showToast('Camera not found. Audio only.', 'info');
-                } catch (err3) {
-                    console.warn('No media devices found.');
-                    localStream = null;
-                    showToast('No devices found. Joining as viewer.', 'info');
-                }
-            }
+            console.warn('Could not get audio.', err);
+            localStream = null;
+            showToast('Microphone not found. Joining as viewer.', 'info');
         }
 
         if (localStream) {
-            localVideo.srcObject = localStream;
+            // Local video shows nothing (or user avatar/placeholder)
             updateButtonStates();
         } else {
             // No local stream
-            localVideoWrapper.classList.add('camera-off');
             localVideoWrapper.classList.add('mic-off');
-            cameraBtn.classList.add('inactive');
             micBtn.classList.add('inactive');
         }
 
@@ -134,32 +111,12 @@ async function startLocalStream() {
 function updateButtonStates() {
     // Default: disabled if no stream
     if (!localStream) {
-        cameraBtn.classList.add('disabled');
         micBtn.classList.add('disabled');
-        localVideoWrapper.classList.add('camera-off');
         localVideoWrapper.classList.add('mic-off');
         return;
     }
 
-    const videoTrack = localStream.getVideoTracks()[0];
     const audioTrack = localStream.getAudioTracks()[0];
-
-    if (videoTrack) {
-        cameraBtn.classList.remove('disabled');
-        if (videoTrack.enabled) {
-            cameraBtn.classList.remove('inactive');
-            cameraBtn.classList.add('active');
-            localVideoWrapper.classList.remove('camera-off');
-        } else {
-            cameraBtn.classList.remove('active');
-            cameraBtn.classList.add('inactive');
-            localVideoWrapper.classList.add('camera-off');
-        }
-    } else {
-        // No video track -> disable button
-        cameraBtn.classList.add('disabled');
-        localVideoWrapper.classList.add('camera-off');
-    }
 
     if (audioTrack) {
         micBtn.classList.remove('disabled');
@@ -395,36 +352,7 @@ socket.on('media-state-change', (payload) => {
 
 // Controls
 
-cameraBtn.addEventListener('click', () => {
-    if (!localStream) {
-        showToast('No camera found', 'error');
-        return;
-    }
-    const videoTrack = localStream.getVideoTracks()[0];
-    if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-
-        // Update Local UI
-        if (videoTrack.enabled) {
-            cameraBtn.classList.remove('inactive');
-            cameraBtn.classList.add('active');
-            localVideoWrapper.classList.remove('camera-off');
-        } else {
-            cameraBtn.classList.remove('active');
-            cameraBtn.classList.add('inactive');
-            localVideoWrapper.classList.add('camera-off');
-        }
-
-        // Notify remote peer
-        socket.emit('media-state-change', {
-            roomId,
-            type: 'video',
-            enabled: videoTrack.enabled
-        });
-    } else {
-        showToast('No camera available', 'error');
-    }
-});
+// Camera Button listener removed
 
 micBtn.addEventListener('click', () => {
     if (!localStream) {
@@ -470,11 +398,19 @@ screenBtn.addEventListener('click', async () => {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenTrack = screenStream.getVideoTracks()[0];
 
-        // Replace video track in peer connection sender
+        // Replace video track in peer connection sender or Add track if not exists
         if (peerConnection) {
             const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
-                sender.replaceTrack(screenTrack);
+                await sender.replaceTrack(screenTrack);
+            } else {
+                // No video sender (audio only mode), so add track
+                peerConnection.addTrack(screenTrack, localStream || screenStream);
+
+                // Renegotiate
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('offer', { type: 'offer', sdp: offer, roomId: roomId });
             }
         } else {
             showToast('Sharing screen (Waiting for peer to join)', 'info');
@@ -511,21 +447,25 @@ stopShareBtn.addEventListener('click', () => {
 function stopScreenShare() {
     if (!isScreenSharing) return;
 
-    if (localStream) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (peerConnection) {
-            const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender) {
-                sender.replaceTrack(videoTrack);
-            }
+    if (peerConnection) {
+        // If we added a track, we might want to remove it or replace it with null/black
+        // But removing track is tricky in WebRTC.
+        // Easiest is to just stop the track.
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) {
+            // We can't easily "remove" the sender without renegotiation that might remove the m-line.
+            // Replacing with null stops sending.
+            sender.replaceTrack(null);
         }
-        localVideo.srcObject = localStream;
+    }
 
-        // Stop the screen share stream tracks
-        if (currentScreenStream) {
-            currentScreenStream.getTracks().forEach(track => track.stop());
-            currentScreenStream = null;
-        }
+    // Clear local video
+    localVideo.srcObject = null;
+
+    // Stop the screen share stream tracks
+    if (currentScreenStream) {
+        currentScreenStream.getTracks().forEach(track => track.stop());
+        currentScreenStream = null;
     }
 
     isScreenSharing = false;
