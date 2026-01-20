@@ -44,6 +44,9 @@
             <div class="room-info">
                 <i class="fas fa-hashtag"></i>
                 <span id="room-id-display">Room ID</span>
+                <button id="copy-link-btn" class="icon-btn" title="Copy Invite Link">
+                    <i class="fas fa-copy"></i>
+                </button>
             </div>
             <div class="connection-status">
                 <div class="status-dot"></div>
@@ -98,6 +101,37 @@
                 <i class="fas fa-phone-slash"></i>
             </button>
         </footer>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-modal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>Video Quality</label>
+                    <select id="quality-select">
+                        <option value="high">High (720p)</option>
+                        <option value="medium" selected>Medium (480p)</option>
+                        <option value="low">Low (240p)</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Frame Rate</label>
+                    <select id="fps-select">
+                        <option value="60">60 FPS</option>
+                        <option value="30" selected>30 FPS</option>
+                        <option value="15">15 FPS</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="apply-settings-btn" class="primary-btn">Apply Changes</button>
+            </div>
+        </div>
     </div>
 </body>
 </html>
