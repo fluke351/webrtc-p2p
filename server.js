@@ -37,6 +37,16 @@ io.on('connection', (socket) => {
         socket.on('media-state-change', (payload) => {
             socket.to(roomId).emit('media-state-change', payload);
         });
+
+        // Chat Feature
+        socket.on('chat-message', (message) => {
+            socket.to(roomId).emit('chat-message', message);
+        });
+
+        // Reaction Feature
+        socket.on('reaction', (emoji) => {
+            socket.to(roomId).emit('reaction', emoji);
+        });
     });
 });
 

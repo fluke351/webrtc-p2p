@@ -84,15 +84,38 @@
                     <span>User Connected (Audio Only)</span>
                 </div>
                 <video id="remote-video" autoplay playsinline></video>
+                <button id="pip-btn" class="icon-btn pip-btn" title="Picture in Picture">
+                    <i class="fas fa-images"></i>
+                </button>
                 <button id="expand-btn" class="icon-btn expand-btn" title="Full Screen">
                     <i class="fas fa-expand"></i>
                 </button>
                 <div class="video-overlay">
                     <span class="user-label">Remote</span>
+                    <div class="volume-control">
+                        <i class="fas fa-volume-up"></i>
+                        <input type="range" id="remote-volume" min="0" max="1" step="0.1" value="1">
+                    </div>
                     <div class="audio-indicator"><i class="fas fa-microphone"></i></div>
                 </div>
             </div>
         </main>
+
+        <!-- Emoji Container -->
+        <div id="emoji-container"></div>
+
+        <!-- Chat Container -->
+        <div id="chat-container" class="chat-container">
+            <div class="chat-header">
+                <h3>Live Chat</h3>
+                <button id="close-chat" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
+                <button id="send-btn" class="icon-btn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
 
         <footer class="controls-bar">
             <button id="mic-btn" class="control-btn active" title="Toggle Microphone">
@@ -100,6 +123,21 @@
             </button>
             <button id="screen-btn" class="control-btn" title="Share Screen">
                 <i class="fas fa-desktop"></i>
+            </button>
+            <div class="reaction-wrapper">
+                <button id="reaction-btn" class="control-btn" title="Send Reaction">
+                    <i class="fas fa-smile"></i>
+                </button>
+                <div class="reaction-menu">
+                    <span data-emoji="❤️">❤️</span>
+                    <span data-emoji="😂">😂</span>
+                    <span data-emoji="😮">😮</span>
+                    <span data-emoji="👏">👏</span>
+                    <span data-emoji="🎉">🎉</span>
+                </div>
+            </div>
+            <button id="chat-btn" class="control-btn" title="Chat">
+                <i class="fas fa-comment-alt"></i>
             </button>
             <button id="stop-share-btn" class="control-btn danger" title="Stop Sharing" style="display: none;">
                 <i class="fas fa-stop-circle"></i>

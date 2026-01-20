@@ -32,8 +32,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const leaveBtn = document.getElementById('leave-btn');
     const expandBtn = document.getElementById('expand-btn');
 
+    // New Features Elements
+    const chatBtn = document.getElementById('chat-btn');
+    const chatContainer = document.getElementById('chat-container');
+    const closeChatBtn = document.getElementById('close-chat');
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chatMessages = document.getElementById('chat-messages');
+    const emojiContainer = document.getElementById('emoji-container');
+    const pipBtn = document.getElementById('pip-btn');
+    const volumeSlider = document.getElementById('remote-volume');
+
     // --- State Variables ---
     let localStream = null;
+    let remoteStream = null;
     let peerConnection = null;
     let videoSender = null;
     let roomId = null;
@@ -587,4 +599,99 @@ document.addEventListener('DOMContentLoaded', () => {
     leaveBtn.addEventListener('click', () => {
         location.href = '/';
     });
+
+    // --- New Features Logic ---
+
+    // 1. Live Chat
+    chatBtn.addEventListener('click', () => {
+        chatContainer.classList.toggle('active');
+        chatBtn.classList.toggle('active');
+    });
+
+    closeChatBtn.addEventListener('click', () => {
+        chatContainer.classList.remove('active');
+        chatBtn.classList.remove('active');
+    });
+
+    function sendMessage() {
+        const message = chatInput.value.trim();
+        if (message) {
+            appendMessage(message, 'self');
+            socket.emit('chat-message', message);
+            chatInput.value = '';
+        }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    socket.on('chat-message', (message) => {
+        appendMessage(message, 'other');
+        if (!chatContainer.classList.contains('active')) {
+            showToast('New message', 'info');
+        }
+    });
+
+    function appendMessage(text, type) {
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('message', type);
+        msgDiv.textContent = text;
+        chatMessages.appendChild(msgDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // 2. Reactions (Emoji Rain)
+    document.querySelectorAll('.reaction-menu span').forEach(emojiBtn => {
+        emojiBtn.addEventListener('click', () => {
+            const emoji = emojiBtn.dataset.emoji;
+            showFloatingEmoji(emoji);
+            socket.emit('reaction', emoji);
+        });
+    });
+
+    socket.on('reaction', (emoji) => {
+        showFloatingEmoji(emoji);
+    });
+
+    function showFloatingEmoji(emoji) {
+        const el = document.createElement('div');
+        el.classList.add('floating-emoji');
+        el.textContent = emoji;
+        el.style.left = Math.random() * 80 + 10 + '%';
+        emojiContainer.appendChild(el);
+
+        setTimeout(() => {
+            el.remove();
+        }, 4000);
+    }
+
+    // 3. Picture-in-Picture
+    pipBtn.addEventListener('click', async () => {
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+            } else if (remoteVideo.readyState !== 0) {
+                await remoteVideo.requestPictureInPicture();
+            }
+        } catch (error) {
+            console.error('PiP Error:', error);
+            showToast('PiP failed: ' + error.message, 'error');
+        }
+    });
+
+    // 4. Volume Control
+    volumeSlider.addEventListener('input', (e) => {
+        remoteVideo.volume = e.target.value;
+        const icon = volumeSlider.parentElement.querySelector('i');
+        if (remoteVideo.volume == 0) {
+            icon.className = 'fas fa-volume-mute';
+        } else if (remoteVideo.volume < 0.5) {
+            icon.className = 'fas fa-volume-down';
+        } else {
+            icon.className = 'fas fa-volume-up';
+        }
+    });
+
 });
