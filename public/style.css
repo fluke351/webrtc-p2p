@@ -637,6 +637,14 @@ video {
     align-self: flex-start;
 }
 
+.sender-name {
+    display: block;
+    font-size: 0.75rem;
+    color: #ff9999; /* Light red */
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
 .chat-input-area {
     padding: 15px;
     border-top: 1px solid rgba(255,255,255,0.1);
@@ -665,8 +673,7 @@ video {
     border: 1px solid rgba(255,255,255,0.1);
 }
 
-.reaction-wrapper:hover .reaction-menu,
-.reaction-menu:hover {
+.reaction-menu.show {
     opacity: 1;
     pointer-events: auto;
     bottom: 80px;

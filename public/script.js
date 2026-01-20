@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const joinScreen = document.getElementById('join-screen');
     const roomScreen = document.getElementById('room-screen');
     const roomInput = document.getElementById('room-input');
+    const nicknameInput = document.getElementById('nickname-input');
+    const passwordInput = document.getElementById('password-input');
     const joinBtn = document.getElementById('join-btn');
     const roomIdDisplay = document.getElementById('room-id-display');
     const copyLinkBtn = document.getElementById('copy-link-btn');
@@ -49,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let peerConnection = null;
     let videoSender = null;
     let roomId = null;
+    let myNickname = '';
+    let roomPassword = '';
     let isScreenSharing = false;
     let currentScreenStream = null;
 
@@ -191,6 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
     joinBtn.addEventListener('click', async () => {
         console.log('Join button clicked');
         roomId = roomInput.value.trim();
+        myNickname = nicknameInput.value.trim();
+        roomPassword = passwordInput.value.trim();
+
+        if (!myNickname) {
+            showToast('Please enter a nickname', 'error');
+            return;
+        }
+
         if (!roomId) {
             showToast('Please enter a room ID', 'error');
             return;
@@ -242,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + id;
         window.history.pushState({ path: newUrl }, '', newUrl);
 
-        socket.emit('join-room', id, socket.id);
+        socket.emit('join-room', id, socket.id, myNickname, roomPassword);
     }
 
     copyLinkBtn.addEventListener('click', () => {
@@ -256,9 +268,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- WebRTC Logic ---
 
-    socket.on('user-connected', async (userId) => {
-        console.log('User connected:', userId);
-        showToast('User connected', 'info');
+    socket.on('error-message', (message) => {
+        showToast(message, 'error');
+        if (message === 'Incorrect password') {
+            joinScreen.style.display = 'flex';
+            roomScreen.style.display = 'none';
+            joinScreen.classList.add('active');
+            resetJoinBtn('<span>Join Room</span><i class="fas fa-arrow-right"></i>');
+        }
+    });
+
+    socket.on('user-connected', async (userId, nickname) => {
+        console.log('User connected:', userId, nickname);
+        showToast(`${nickname || 'User'} connected`, 'info');
         remoteVideoWrapper.classList.remove('placeholder');
         if (waitingMessage) waitingMessage.style.display = 'none'; // Explicitly hide waiting message
         remoteVideoWrapper.classList.add('camera-off'); // Default to audio-only visual until video track arrives
@@ -339,9 +361,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    socket.on('user-disconnected', () => {
+    socket.on('user-disconnected', (userId, nickname) => {
         console.log('User disconnected');
-        showToast('User disconnected', 'info');
+        showToast(`${nickname || 'User'} disconnected`, 'info');
         if (peerConnection) {
             peerConnection.close();
             peerConnection = null;
@@ -616,8 +638,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function sendMessage() {
         const message = chatInput.value.trim();
         if (message) {
-            appendMessage(message, 'self');
-            socket.emit('chat-message', message);
+            const msgData = { text: message, sender: myNickname };
+            appendMessage(msgData, 'self');
+            socket.emit('chat-message', msgData);
             chatInput.value = '';
         }
     }
@@ -627,22 +650,53 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') sendMessage();
     });
 
-    socket.on('chat-message', (message) => {
-        appendMessage(message, 'other');
+    socket.on('chat-message', (msgData) => {
+        // Backward compatibility
+        if (typeof msgData === 'string') {
+            msgData = { text: msgData, sender: 'User' };
+        }
+        appendMessage(msgData, 'other');
         if (!chatContainer.classList.contains('active')) {
-            showToast('New message', 'info');
+            showToast(`New message from ${msgData.sender}`, 'info');
         }
     });
 
-    function appendMessage(text, type) {
+    function appendMessage(data, type) {
         const msgDiv = document.createElement('div');
         msgDiv.classList.add('message', type);
-        msgDiv.textContent = text;
+
+        if (type === 'other') {
+            const senderSpan = document.createElement('span');
+            senderSpan.classList.add('sender-name');
+            senderSpan.textContent = data.sender;
+            msgDiv.appendChild(senderSpan);
+        }
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = data.text;
+        msgDiv.appendChild(textSpan);
+
         chatMessages.appendChild(msgDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     // 2. Reactions (Emoji Rain)
+    const reactionBtn = document.getElementById('reaction-btn');
+    const reactionMenu = document.querySelector('.reaction-menu');
+
+    reactionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reactionMenu.classList.toggle('show');
+        reactionBtn.classList.toggle('active');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!reactionBtn.contains(e.target) && !reactionMenu.contains(e.target)) {
+            reactionMenu.classList.remove('show');
+            reactionBtn.classList.remove('active');
+        }
+    });
+
     document.querySelectorAll('.reaction-menu span').forEach(emojiBtn => {
         emojiBtn.addEventListener('click', () => {
             const emoji = emojiBtn.dataset.emoji;
