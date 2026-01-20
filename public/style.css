@@ -243,6 +243,17 @@ input:focus {
     text-align: center;
     color: #fff;
     animation: pulse 3s infinite ease-in-out;
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    z-index: 10;
+}
+
+.video-wrapper.placeholder .waiting-message {
+    display: block; /* Show only when waiting */
 }
 
 .waiting-message i {

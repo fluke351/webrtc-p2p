@@ -14,6 +14,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    // --- DOM Elements ---
+    const joinScreen = document.getElementById('join-screen');
+    const roomScreen = document.getElementById('room-screen');
+    const roomInput = document.getElementById('room-input');
+    const joinBtn = document.getElementById('join-btn');
+    const roomIdDisplay = document.getElementById('room-id-display');
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    const localVideo = document.getElementById('local-video');
+    const remoteVideo = document.getElementById('remote-video');
+    const remoteVideoWrapper = document.querySelector('.video-wrapper.remote');
+    const waitingMessage = remoteVideoWrapper.querySelector('.waiting-message');
+    const localVideoWrapper = document.querySelector('.video-wrapper.local');
+    const micBtn = document.getElementById('mic-btn');
+    const screenBtn = document.getElementById('screen-btn');
+    const stopShareBtn = document.getElementById('stop-share-btn');
+    const leaveBtn = document.getElementById('leave-btn');
+    const expandBtn = document.getElementById('expand-btn');
+
+    // --- State Variables ---
+    let localStream = null;
+    let peerConnection = null;
+    let videoSender = null;
+    let roomId = null;
+    let isScreenSharing = false;
+    let currentScreenStream = null;
+
+    // --- WebRTC Config ---
+    const rtcConfig = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
+
     // --- Helper Functions ---
 
     function showToast(message, type = 'info') {
@@ -116,50 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
 
-    // Global Error Handler for debugging on mobile/other devices
-    window.onerror = function (message, source, lineno, colno, error) {
-        showToast(`Error: ${message}`, 'error');
-        console.error('Global Error:', error);
-        return false;
-    };
-
-    joinBtn.addEventListener('click', async () => {
-        roomId = roomInput.value.trim();
-        if (!roomId) {
-            showToast('Please enter a room ID', 'error');
-            return;
-        }
-
-        // Set Loading State
-        const originalText = joinBtn.innerHTML;
-        joinBtn.disabled = true;
-        joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Joining...</span>';
-
-        try {
-            const success = await startLocalStream();
-
-            if (success) {
-                joinScreen.classList.remove('active');
-                joinScreen.style.display = 'none';
-                roomScreen.style.display = 'flex';
-                roomIdDisplay.innerText = roomId;
-
-                // Update URL without reloading
-                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
-                window.history.pushState({ path: newUrl }, '', newUrl);
-
-                socket.emit('join-room', roomId, socket.id);
-            } else {
-                // Should theoretically not happen as startLocalStream returns true
-                showToast('Failed to initialize. Please try again.', 'error');
-                joinBtn.disabled = false;
-                joinBtn.innerHTML = originalText;
-            }
-        } catch (err) {
-            console.error('Join error:', err);
-            showToast('Error joining room: ' + err.message, 'error');
-            joinBtn.disabled = false;
-            joinBtn.innerHTML = originalText;
+    // Enter key support
+    roomInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            joinBtn.click();
         }
     });
 
@@ -174,6 +168,70 @@ document.addEventListener('DOMContentLoaded', () => {
             expandBtn.title = "Full Screen";
         }
     });
+
+    // Global Error Handler for debugging on mobile/other devices
+    window.onerror = function (message, source, lineno, colno, error) {
+        showToast(`Error: ${message}`, 'error');
+        console.error('Global Error:', error);
+        return false;
+    };
+
+    joinBtn.addEventListener('click', async () => {
+        console.log('Join button clicked');
+        roomId = roomInput.value.trim();
+        if (!roomId) {
+            showToast('Please enter a room ID', 'error');
+            return;
+        }
+
+        // Set Loading State
+        const originalText = joinBtn.innerHTML;
+        joinBtn.disabled = true;
+        joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Joining...</span>';
+
+        try {
+            // Timeout race for getUserMedia
+            const mediaPromise = startLocalStream();
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 5000));
+
+            const result = await Promise.race([mediaPromise, timeoutPromise]);
+
+            if (result === 'timeout') {
+                console.warn('Media access timed out, proceeding as viewer');
+                showToast('Media access slow/failed. Joining as viewer.', 'info');
+                // Force join without local stream
+                joinRoomSuccess(roomId);
+            } else if (result) {
+                joinRoomSuccess(roomId);
+            } else {
+                // startLocalStream returned false/null
+                showToast('Failed to initialize. Please try again.', 'error');
+                resetJoinBtn(originalText);
+            }
+        } catch (err) {
+            console.error('Join error:', err);
+            showToast('Error joining room: ' + err.message, 'error');
+            resetJoinBtn(originalText);
+        }
+    });
+
+    function resetJoinBtn(originalText) {
+        joinBtn.disabled = false;
+        joinBtn.innerHTML = originalText;
+    }
+
+    function joinRoomSuccess(id) {
+        joinScreen.classList.remove('active');
+        joinScreen.style.display = 'none';
+        roomScreen.style.display = 'flex';
+        roomIdDisplay.innerText = id;
+
+        // Update URL without reloading
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + id;
+        window.history.pushState({ path: newUrl }, '', newUrl);
+
+        socket.emit('join-room', id, socket.id);
+    }
 
     copyLinkBtn.addEventListener('click', () => {
         const link = window.location.href;
@@ -190,6 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('User connected:', userId);
         showToast('User connected', 'info');
         remoteVideoWrapper.classList.remove('placeholder');
+        if (waitingMessage) waitingMessage.style.display = 'none'; // Explicitly hide waiting message
         remoteVideoWrapper.classList.add('camera-off'); // Default to audio-only visual until video track arrives
         createPeerConnection();
 
@@ -199,10 +258,30 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Fix: If already sharing screen, add that track too
+        if (isScreenSharing && currentScreenStream) {
+            const screenTrack = currentScreenStream.getVideoTracks()[0];
+            if (screenTrack) {
+                console.log('Adding existing screen track to new connection');
+                videoSender = peerConnection.addTrack(screenTrack, currentScreenStream);
+            }
+        }
+
         try {
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
             socket.emit('offer', { type: 'offer', sdp: offer, roomId: roomId });
+
+            // Sync state after offer
+            if (isScreenSharing) {
+                setTimeout(() => {
+                    socket.emit('media-state-change', {
+                        roomId,
+                        type: 'video',
+                        enabled: true
+                    });
+                }, 1000);
+            }
         } catch (err) {
             console.error('Error creating offer:', err);
         }
@@ -211,6 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('offer', async (payload) => {
         console.log('Received offer');
         remoteVideoWrapper.classList.remove('placeholder');
+        if (waitingMessage) waitingMessage.style.display = 'none'; // Explicitly hide waiting message
         if (!peerConnection) {
             createPeerConnection();
             localStream.getTracks().forEach(track => {
@@ -256,6 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         remoteVideo.srcObject = null;
         remoteVideoWrapper.classList.add('placeholder');
+        if (waitingMessage) waitingMessage.style.display = 'block'; // Explicitly show waiting message
     });
 
     // Auto-reconnect Logic
@@ -263,6 +344,23 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Disconnected. Attempting to reconnect...', 'error');
     });
 
+    // Video Event Listeners for better UI state management
+    remoteVideo.onplaying = () => {
+        console.log('Remote video is playing');
+        remoteVideoWrapper.classList.remove('placeholder');
+        remoteVideoWrapper.classList.remove('camera-off');
+        if (waitingMessage) waitingMessage.style.display = 'none';
+    };
+
+    remoteVideo.onloadedmetadata = () => {
+        console.log('Remote video metadata loaded');
+        if (remoteVideo.srcObject && remoteVideo.srcObject.active) {
+            remoteVideoWrapper.classList.remove('placeholder');
+            if (waitingMessage) waitingMessage.style.display = 'none';
+        }
+    };
+
+    // Socket.io Events
     socket.on('connect', () => {
         if (roomId && roomScreen.style.display !== 'none') {
             showToast('Reconnected!', 'success');
@@ -275,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (peerConnection) return;
 
         peerConnection = new RTCPeerConnection(rtcConfig);
+        videoSender = null; // Reset video sender for new connection
 
         peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
@@ -283,9 +382,24 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         peerConnection.ontrack = (event) => {
-            console.log('Received remote track');
-            remoteVideo.srcObject = event.streams[0];
+            console.log('Received remote track:', event.track.kind);
+            const stream = event.streams[0];
+
+            // Force update srcObject if it's new or just to ensure it plays
+            if (remoteVideo.srcObject !== stream) {
+                remoteVideo.srcObject = stream;
+                console.log('Assigned new stream to remote video');
+            }
+
             remoteVideoWrapper.classList.remove('placeholder');
+            if (waitingMessage) waitingMessage.style.display = 'none'; // Explicitly hide waiting message
+
+            // Auto-detect video track and show video
+            if (event.track.kind === 'video') {
+                remoteVideoWrapper.classList.remove('camera-off');
+                // Ensure video plays
+                remoteVideo.play().catch(e => console.error('Error playing video:', e));
+            }
         };
 
         // ICE Connection State Monitoring
@@ -303,6 +417,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (payload.type === 'video') {
             if (payload.enabled) {
                 remoteVideoWrapper.classList.remove('camera-off');
+                // Ensure video plays when enabled
+                remoteVideo.play().catch(e => console.error('Error playing remote video:', e));
             } else {
                 remoteVideoWrapper.classList.add('camera-off');
             }
@@ -365,17 +481,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Replace video track in peer connection sender or Add track if not exists
             if (peerConnection) {
-                const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                if (sender) {
-                    await sender.replaceTrack(screenTrack);
+                if (videoSender) {
+                    // Reuse existing sender
+                    await videoSender.replaceTrack(screenTrack);
                 } else {
-                    // No video sender (audio only mode), so add track
-                    peerConnection.addTrack(screenTrack, localStream || screenStream);
+                    // Try to find an existing video sender that might have been created before
+                    const senders = peerConnection.getSenders();
+                    const existingSender = senders.find(s => s.track && s.track.kind === 'video');
 
-                    // Renegotiate
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    socket.emit('offer', { type: 'offer', sdp: offer, roomId: roomId });
+                    if (existingSender) {
+                        videoSender = existingSender;
+                        await videoSender.replaceTrack(screenTrack);
+                    } else {
+                        // No video sender (audio only mode), so add track
+                        videoSender = peerConnection.addTrack(screenTrack, localStream || screenStream);
+
+                        // Renegotiate
+                        const offer = await peerConnection.createOffer();
+                        await peerConnection.setLocalDescription(offer);
+                        socket.emit('offer', { type: 'offer', sdp: offer, roomId: roomId });
+                    }
                 }
             } else {
                 showToast('Sharing screen (Waiting for peer to join)', 'info');
@@ -424,14 +549,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isScreenSharing) return;
 
         if (peerConnection) {
-            // If we added a track, we might want to remove it or replace it with null/black
-            // But removing track is tricky in WebRTC.
-            // Easiest is to just stop the track.
-            const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender) {
-                // We can't easily "remove" the sender without renegotiation that might remove the m-line.
-                // Replacing with null stops sending.
-                sender.replaceTrack(null);
+            if (videoSender) {
+                // Keep the sender, just stop sending media
+                videoSender.replaceTrack(null).catch(e => console.error('Error stopping track:', e));
+            } else {
+                // Fallback attempt to find sender
+                const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(null).catch(e => console.error('Error stopping track:', e));
+                }
             }
         }
 
@@ -461,3 +587,4 @@ document.addEventListener('DOMContentLoaded', () => {
     leaveBtn.addEventListener('click', () => {
         location.href = '/';
     });
+});
