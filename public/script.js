@@ -151,6 +151,13 @@ if (roomParam) {
 
 // --- Event Listeners ---
 
+// Global Error Handler for debugging on mobile/other devices
+window.onerror = function (message, source, lineno, colno, error) {
+    showToast(`Error: ${message}`, 'error');
+    console.error('Global Error:', error);
+    return false;
+};
+
 joinBtn.addEventListener('click', async () => {
     roomId = roomInput.value.trim();
     if (!roomId) {
@@ -158,18 +165,36 @@ joinBtn.addEventListener('click', async () => {
         return;
     }
 
-    const success = await startLocalStream();
-    if (success) {
-        joinScreen.classList.remove('active');
-        joinScreen.style.display = 'none';
-        roomScreen.style.display = 'flex';
-        roomIdDisplay.innerText = roomId;
+    // Set Loading State
+    const originalText = joinBtn.innerHTML;
+    joinBtn.disabled = true;
+    joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Joining...</span>';
 
-        // Update URL without reloading
-        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
-        window.history.pushState({ path: newUrl }, '', newUrl);
+    try {
+        const success = await startLocalStream();
 
-        socket.emit('join-room', roomId, socket.id);
+        if (success) {
+            joinScreen.classList.remove('active');
+            joinScreen.style.display = 'none';
+            roomScreen.style.display = 'flex';
+            roomIdDisplay.innerText = roomId;
+
+            // Update URL without reloading
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            socket.emit('join-room', roomId, socket.id);
+        } else {
+            // Should theoretically not happen as startLocalStream returns true
+            showToast('Failed to initialize. Please try again.', 'error');
+            joinBtn.disabled = false;
+            joinBtn.innerHTML = originalText;
+        }
+    } catch (err) {
+        console.error('Join error:', err);
+        showToast('Error joining room: ' + err.message, 'error');
+        joinBtn.disabled = false;
+        joinBtn.innerHTML = originalText;
     }
 });
 
