@@ -434,8 +434,12 @@ screenBtn.addEventListener('click', async () => {
 
     } catch (err) {
         console.error('Error sharing screen:', err);
-        if (err.name !== 'NotAllowedError') {
-            showToast('Failed to share screen', 'error');
+        if (err.name === 'NotAllowedError') {
+            showToast('Screen sharing permission denied', 'error');
+        } else if (err.name === 'NotSupportedError') {
+            showToast('Screen sharing not supported by this browser', 'error');
+        } else {
+            showToast('Failed to share screen: ' + err.message, 'error');
         }
     }
 });
