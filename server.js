@@ -18,7 +18,10 @@ io.on('connection', (socket) => {
         // Room Password Logic
         if (!rooms[roomId]) {
             // Create room (store password if provided)
-            rooms[roomId] = { password: password || null };
+            rooms[roomId] = {
+                password: password || null,
+                host: socket.id // First user is host
+            };
         } else {
             // Check password
             if (rooms[roomId].password && rooms[roomId].password !== password) {
@@ -29,10 +32,24 @@ io.on('connection', (socket) => {
 
         console.log(`User ${userId} (${nickname}) joined room ${roomId}`);
         socket.join(roomId);
+
+        // Notify user if they are host
+        if (rooms[roomId].host === socket.id) {
+            socket.emit('you-are-host');
+        } else {
+            // Notify existing host about new user? (Optional)
+        }
+
         socket.to(roomId).emit('user-connected', userId, nickname);
+
+        // Update Viewer Count
+        const clients = io.sockets.adapter.rooms.get(roomId);
+        const count = clients ? clients.size : 0;
+        io.to(roomId).emit('update-viewer-count', count);
 
         // Store nickname on socket for reference
         socket.data.nickname = nickname;
+        socket.data.roomId = roomId; // Store roomId for disconnect handling
 
         socket.on('disconnect', () => {
             console.log(`User ${userId} disconnected`);
@@ -42,20 +59,46 @@ io.on('connection', (socket) => {
             const room = io.sockets.adapter.rooms.get(roomId);
             if (!room || room.size === 0) {
                 delete rooms[roomId];
+            } else {
+                // If host disconnected, assign new host
+                if (rooms[roomId] && rooms[roomId].host === socket.id) {
+                    // Get first remaining socket id
+                    const newHostId = room.values().next().value;
+                    rooms[roomId].host = newHostId;
+                    io.to(newHostId).emit('you-are-host');
+                    // Optional: notify everyone about new host
+                }
+
+                // Update Viewer Count for remaining users
+                io.to(roomId).emit('update-viewer-count', room.size);
+            }
+        });
+
+        // Host Actions
+        socket.on('kick-user', (targetUserId) => {
+            // Verify requester is host
+            if (rooms[roomId] && rooms[roomId].host === socket.id) {
+                io.to(targetUserId).emit('kicked');
+                // Force disconnect socket
+                const targetSocket = io.sockets.sockets.get(targetUserId);
+                if (targetSocket) {
+                    targetSocket.leave(roomId);
+                    targetSocket.disconnect(true);
+                }
             }
         });
 
         // Relay signaling messages
         socket.on('offer', (payload) => {
-            socket.to(roomId).emit('offer', payload);
+            io.to(payload.target).emit('offer', payload);
         });
 
         socket.on('answer', (payload) => {
-            socket.to(roomId).emit('answer', payload);
+            io.to(payload.target).emit('answer', payload);
         });
 
         socket.on('candidate', (payload) => {
-            socket.to(roomId).emit('candidate', payload);
+            io.to(payload.target).emit('candidate', payload);
         });
 
         socket.on('media-state-change', (payload) => {
@@ -75,6 +118,15 @@ io.on('connection', (socket) => {
         // Sound Effect Feature
         socket.on('play-sound', (soundId) => {
             socket.to(roomId).emit('play-sound', soundId);
+        });
+        // Game Feature (Tic-Tac-Toe)
+        socket.on('game-move', (payload) => {
+            // payload: { index, symbol, roomId }
+            socket.to(payload.roomId).emit('game-move', payload);
+        });
+
+        socket.on('game-restart', (roomId) => {
+            socket.to(roomId).emit('game-restart');
         });
     });
 });
