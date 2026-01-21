@@ -98,6 +98,24 @@
                 <button id="pip-btn" class="icon-btn pip-btn" title="Picture in Picture">
                     <i class="fas fa-images"></i>
                 </button>
+                <button id="settings-btn" class="icon-btn settings-btn" title="Video Quality">
+                    <i class="fas fa-cog"></i>
+                </button>
+                
+                <!-- Quality Settings Menu -->
+                <div id="settings-menu" class="settings-menu">
+                    <div class="settings-header">Video Quality</div>
+                    <div class="quality-options">
+                        <button class="quality-btn active" data-quality="auto">Auto</button>
+                        <button class="quality-btn" data-quality="high">High (HD)</button>
+                        <button class="quality-btn" data-quality="medium">Medium (SD)</button>
+                        <button class="quality-btn" data-quality="low">Low (Data Saver)</button>
+                    </div>
+                    <div class="network-stats-detail">
+                        <small>Packet Loss: <span id="loss-display">0%</span></small>
+                    </div>
+                </div>
+
                 <button id="expand-btn" class="icon-btn expand-btn" title="Full Screen">
                     <i class="fas fa-expand"></i>
                 </button>

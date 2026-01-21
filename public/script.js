@@ -288,7 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (localStream) {
             localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
+                const sender = peerConnection.addTrack(track, localStream);
+                if (track.kind === 'video') videoSender = sender;
             });
         }
 
@@ -861,39 +862,127 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', resetHideTimer);
     document.addEventListener('keydown', resetHideTimer);
 
-    // 7. Connection Status Monitor
-    const pingDisplay = document.getElementById('ping-display');
-    const statusDot = document.querySelector('.status-dot');
+    // 8. Video Quality Control & Enhanced Stats
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsMenu = document.getElementById('settings-menu');
+    const qualityBtns = document.querySelectorAll('.quality-btn');
+    const lossDisplay = document.getElementById('loss-display');
 
+    let currentQuality = 'auto';
+
+    settingsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        settingsMenu.classList.toggle('active');
+        // Close other menus
+        if (typeof soundMenu !== 'undefined') soundMenu.classList.remove('show');
+        const reactionMenu = document.querySelector('.reaction-menu');
+        if (reactionMenu) reactionMenu.classList.remove('show');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!settingsBtn.contains(e.target) && !settingsMenu.contains(e.target)) {
+            settingsMenu.classList.remove('active');
+        }
+    });
+
+    qualityBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            qualityBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentQuality = btn.dataset.quality;
+            setVideoQuality(currentQuality);
+            settingsMenu.classList.remove('active');
+            showToast(`Quality set to: ${btn.textContent}`, 'info');
+        });
+    });
+
+    async function setVideoQuality(quality) {
+        if (!videoSender) return;
+
+        try {
+            const params = videoSender.getParameters();
+            if (!params.encodings) params.encodings = [{}];
+
+            let maxBitrate = null;
+            // Bitrates: High=2.5Mbps, Medium=1Mbps, Low=300Kbps
+            switch (quality) {
+                case 'high': maxBitrate = 2500000; break;
+                case 'medium': maxBitrate = 1000000; break;
+                case 'low': maxBitrate = 300000; break;
+                case 'auto': maxBitrate = null; break; // Reset to default
+            }
+
+            params.encodings[0].maxBitrate = maxBitrate;
+            await videoSender.setParameters(params);
+            console.log('Video quality updated to:', quality);
+        } catch (err) {
+            console.error('Error setting quality:', err);
+        }
+    }
+
+    // Enhanced Stats Loop (Ping + Auto Quality)
     setInterval(async () => {
         if (!peerConnection || peerConnection.iceConnectionState !== 'connected') {
             pingDisplay.textContent = '(Offline)';
             statusDot.style.backgroundColor = '#666';
+            if (lossDisplay) lossDisplay.textContent = '0%';
             return;
         }
 
         try {
             const stats = await peerConnection.getStats();
             let rtt = null;
+            let packetsLost = 0;
 
             stats.forEach(report => {
                 if (report.type === 'candidate-pair' && report.state === 'succeeded') {
                     rtt = report.currentRoundTripTime;
                 }
+                // Check for remote inbound loss (packet loss perceived by other peer)
+                if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
+                    packetsLost = report.packetsLost;
+                }
             });
 
+            // Update Ping UI
             if (rtt !== null) {
                 const pingMs = Math.round(rtt * 1000);
                 pingDisplay.textContent = `(${pingMs}ms)`;
 
-                if (pingMs < 100) {
-                    statusDot.style.backgroundColor = '#46d369'; // Green
-                } else if (pingMs < 200) {
-                    statusDot.style.backgroundColor = '#ffc107'; // Yellow
-                } else {
-                    statusDot.style.backgroundColor = '#e50914'; // Red
+                if (pingMs < 100) statusDot.style.backgroundColor = '#46d369';
+                else if (pingMs < 200) statusDot.style.backgroundColor = '#ffc107';
+                else statusDot.style.backgroundColor = '#e50914';
+
+                // Auto Quality Adjustment Logic
+                if (currentQuality === 'auto' && videoSender) {
+                    const params = videoSender.getParameters();
+                    if (!params.encodings) params.encodings = [{}];
+
+                    let targetBitrate = null; // Default (High/Unlimited)
+
+                    // If Ping is bad (>300ms), drop to Medium. If >500ms, drop to Low.
+                    if (pingMs > 500) {
+                        targetBitrate = 300000;
+                    } else if (pingMs > 300) {
+                        targetBitrate = 1000000;
+                    }
+
+                    // Only update if changed
+                    const currentMax = params.encodings[0].maxBitrate;
+                    if (currentMax !== targetBitrate) {
+                        params.encodings[0].maxBitrate = targetBitrate;
+                        videoSender.setParameters(params).catch(e => console.warn('Auto-quality failed', e));
+                        // Optional: showToast('Auto-adjusting video quality...', 'info');
+                    }
                 }
             }
+
+            if (lossDisplay) {
+                // Just showing cumulative loss for now as a simple indicator
+                lossDisplay.textContent = packetsLost > 0 ? packetsLost + ' pkts' : '0%';
+                lossDisplay.style.color = packetsLost > 100 ? '#e50914' : '#b3b3b3';
+            }
+
         } catch (err) {
             console.warn('Stats error:', err);
         }
