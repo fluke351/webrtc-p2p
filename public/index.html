@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC P2P Room</title>
+    <title>ห้องสนทนา WebRTC P2P</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
             console.log('Socket.io client loaded successfully');
         } else {
             console.error('Socket.io client failed to load');
-            alert('Error: Could not connect to server. Please check your internet connection or try again later.');
+            alert('ข้อผิดพลาด: ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของคุณหรือลองใหม่อีกครั้งในภายหลัง');
         }
     </script>
     <script src="script.js" defer></script>
@@ -26,31 +26,31 @@
                 <div class="icon-bg">
                     <i class="fas fa-video"></i>
                 </div>
-                <h1>Join Meeting</h1>
-                <p>Secure P2P Video Chat</p>
+                <h1>เข้าร่วมการประชุม</h1>
+                <p>วิดีโอแชท P2P ที่ปลอดภัย</p>
             </div>
             
             <div class="input-group">
                 <i class="fas fa-user"></i>
-                <input type="text" id="nickname-input" placeholder="Your Nickname (Required)" autocomplete="off">
+                <input type="text" id="nickname-input" placeholder="ชื่อเล่นของคุณ (จำเป็น)" autocomplete="off">
             </div>
 
             <div class="input-group">
                 <i class="fas fa-hashtag"></i>
-                <input type="text" id="room-input" placeholder="Enter Room ID" autocomplete="off">
+                <input type="text" id="room-input" placeholder="ระบุรหัสห้อง" autocomplete="off">
             </div>
 
             <div class="input-group">
                 <i class="fas fa-lock"></i>
-                <input type="password" id="password-input" placeholder="Room Password (Optional)" autocomplete="off">
+                <input type="password" id="password-input" placeholder="รหัสผ่านห้อง (ไม่บังคับ)" autocomplete="off">
             </div>
 
             <p class="hint">
-                <i class="fas fa-info-circle"></i> For Screen Sharing, please use Chrome, Edge, or Firefox on Desktop.
+                <i class="fas fa-info-circle"></i> สำหรับการแชร์หน้าจอ โปรดใช้ Chrome, Edge หรือ Firefox บนคอมพิวเตอร์
             </p>
 
             <button id="join-btn" class="primary-btn">
-                <span>Join Room</span>
+                <span>เข้าร่วมห้อง</span>
                 <i class="fas fa-arrow-right"></i>
             </button>
         </div>
@@ -61,14 +61,14 @@
         <header class="room-header">
             <div class="room-info">
                 <i class="fas fa-hashtag"></i>
-                <span id="room-id-display">Room ID</span>
-                <button id="copy-link-btn" class="icon-btn" title="Copy Invite Link">
+                <span id="room-id-display">รหัสห้อง</span>
+                <button id="copy-link-btn" class="icon-btn" title="คัดลอกลิงก์เชิญ">
                     <i class="fas fa-copy"></i>
                 </button>
             </div>
             <div class="connection-status">
                 <div class="status-dot"></div>
-                <span id="connection-text">Connected</span>
+                <span id="connection-text">เชื่อมต่อแล้ว</span>
                 <span id="ping-display" style="font-size: 0.8rem; margin-left: 5px; opacity: 0.7;">(0ms)</span>
             </div>
         </header>
@@ -77,50 +77,32 @@
             <div class="video-wrapper local">
                 <div class="camera-off-indicator">
                     <i class="fas fa-desktop"></i>
-                    <span>Sharing Screen</span>
+                    <span>กำลังแชร์หน้าจอ</span>
                 </div>
                 <video id="local-video" autoplay playsinline muted></video>
                 <div class="video-overlay">
-                    <span class="user-label">You</span>
+                    <span class="user-label">คุณ</span>
                     <div class="audio-indicator"><i class="fas fa-microphone"></i></div>
                 </div>
             </div>
             <div class="video-wrapper remote placeholder">
                 <div class="waiting-message">
                     <i class="fas fa-users"></i>
-                    <p>Waiting for someone to join...</p>
+                    <p>กำลังรอคนอื่นเข้าร่วม...</p>
                 </div>
                 <div class="camera-off-indicator">
                     <i class="fas fa-user-circle"></i>
-                    <span>User Connected (Audio Only)</span>
+                    <span>ผู้ใช้เชื่อมต่อแล้ว (เสียงเท่านั้น)</span>
                 </div>
                 <video id="remote-video" autoplay playsinline></video>
-                <button id="pip-btn" class="icon-btn pip-btn" title="Picture in Picture">
+                <button id="pip-btn" class="icon-btn pip-btn" title="โหมดภาพซ้อนภาพ">
                     <i class="fas fa-images"></i>
                 </button>
-                <button id="settings-btn" class="icon-btn settings-btn" title="Video Quality">
-                    <i class="fas fa-cog"></i>
-                </button>
-                
-                <!-- Quality Settings Menu -->
-                <div id="settings-menu" class="settings-menu">
-                    <div class="settings-header">Video Quality</div>
-                    <div class="quality-options">
-                        <button class="quality-btn active" data-quality="auto">Auto</button>
-                        <button class="quality-btn" data-quality="high">High (HD)</button>
-                        <button class="quality-btn" data-quality="medium">Medium (SD)</button>
-                        <button class="quality-btn" data-quality="low">Low (Data Saver)</button>
-                    </div>
-                    <div class="network-stats-detail">
-                        <small>Packet Loss: <span id="loss-display">0%</span></small>
-                    </div>
-                </div>
-
-                <button id="expand-btn" class="icon-btn expand-btn" title="Full Screen">
+                <button id="expand-btn" class="icon-btn expand-btn" title="เต็มหน้าจอ">
                     <i class="fas fa-expand"></i>
                 </button>
                 <div class="video-overlay">
-                    <span class="user-label">Remote</span>
+                    <span class="user-label">คู่สนทนา</span>
                     <div class="volume-control">
                         <i class="fas fa-volume-up"></i>
                         <input type="range" id="remote-volume" min="0" max="1" step="0.1" value="1">
@@ -136,25 +118,25 @@
         <!-- Chat Container -->
         <div id="chat-container" class="chat-container">
             <div class="chat-header">
-                <h3>Live Chat</h3>
+                <h3>แชทสด</h3>
                 <button id="close-chat" class="icon-btn"><i class="fas fa-times"></i></button>
             </div>
             <div id="chat-messages" class="chat-messages"></div>
             <div class="chat-input-area">
-                <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
+                <input type="text" id="chat-input" placeholder="พิมพ์ข้อความ..." autocomplete="off">
                 <button id="send-btn" class="icon-btn"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
 
         <footer class="controls-bar">
-            <button id="mic-btn" class="control-btn active" title="Toggle Microphone">
+            <button id="mic-btn" class="control-btn active" title="เปิด/ปิด ไมโครโฟน">
                 <i class="fas fa-microphone"></i>
             </button>
-            <button id="screen-btn" class="control-btn" title="Share Screen">
+            <button id="screen-btn" class="control-btn" title="แชร์หน้าจอ">
                 <i class="fas fa-desktop"></i>
             </button>
             <div class="reaction-wrapper">
-                <button id="reaction-btn" class="control-btn" title="Send Reaction">
+                <button id="reaction-btn" class="control-btn" title="ส่งความรู้สึก">
                     <i class="fas fa-smile"></i>
                 </button>
                 <div class="reaction-menu">
@@ -168,25 +150,25 @@
 
             <!-- Sound Board -->
             <div class="reaction-wrapper">
-                <button id="sound-btn" class="control-btn" title="Sound Effects">
+                <button id="sound-btn" class="control-btn" title="เอฟเฟกต์เสียง">
                     <i class="fas fa-music"></i>
                 </button>
                 <div class="reaction-menu sound-menu">
-                    <span data-sound="clap" title="Clap">👏</span>
-                    <span data-sound="laugh" title="Laugh">😂</span>
-                    <span data-sound="drum" title="Drum">🥁</span>
-                    <span data-sound="horn" title="Air Horn">📢</span>
+                    <span data-sound="clap" title="ปรบมือ">👏</span>
+                    <span data-sound="laugh" title="หัวเราะ">😂</span>
+                    <span data-sound="drum" title="กลอง">🥁</span>
+                    <span data-sound="horn" title="แตรลม">📢</span>
                 </div>
             </div>
 
-            <button id="chat-btn" class="control-btn" title="Chat">
+            <button id="chat-btn" class="control-btn" title="แชท">
                 <i class="fas fa-comment-alt"></i>
             </button>
-            <button id="stop-share-btn" class="control-btn danger" title="Stop Sharing" style="display: none;">
+            <button id="stop-share-btn" class="control-btn danger" title="หยุดแชร์" style="display: none;">
                 <i class="fas fa-stop-circle"></i>
             </button>
             <div class="divider"></div>
-            <button id="leave-btn" class="control-btn danger" title="Leave Room">
+            <button id="leave-btn" class="control-btn danger" title="ออกจากห้อง">
                 <i class="fas fa-phone-slash"></i>
             </button>
         </footer>

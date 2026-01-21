@@ -8,11 +8,12 @@ const socket = typeof io !== 'undefined' ? io({
 
 // Ensure DOM is ready before attaching listeners
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM fully loaded');
-    if (!socket) {
-        showToast('Server connection failed. Please reload.', 'error');
-        return;
-    }
+        console.log('DOM fully loaded');
+        if (!socket) {
+            showToast('การเชื่อมต่อเซิร์ฟเวอร์ล้มเหลว โปรดโหลดใหม่', 'error');
+            return;
+        }
+
 
     // --- DOM Elements ---
     const joinScreen = document.getElementById('join-screen');
@@ -50,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let remoteStream = null;
     let peerConnection = null;
     let videoSender = null;
+let screenAudioSender = null;
+
     let roomId = null;
     let myNickname = '';
     let roomPassword = '';
@@ -89,7 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getConstraints() {
         return {
-            video: false, // Default to audio only, no camera
+video: true, // Enable camera
+
             audio: true
         };
     }
@@ -107,7 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.warn('Could not get audio.', err);
                 localStream = null;
-                showToast('Microphone not found. Joining as viewer.', 'info');
+showToast('ไม่พบไมโครโฟน เข้าร่วมในฐานะผู้ชม', 'info');
+
             }
 
             if (localStream) {
@@ -122,7 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return true; // Always allow joining
         } catch (err) {
             console.error('Error accessing media devices:', err);
-            showToast('Error initializing media. Joining as viewer.', 'error');
+showToast('เกิดข้อผิดพลาดในการเริ่มต้นสื่อ เข้าร่วมในฐานะผู้ชม', 'error');
+
             return true;
         }
     }
@@ -178,16 +184,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const icon = expandBtn.querySelector('i');
         if (remoteVideoWrapper.classList.contains('expanded')) {
             icon.className = 'fas fa-compress';
-            expandBtn.title = "Exit Full Screen";
+expandBtn.title = "ออกจากเต็มหน้าจอ";
         } else {
             icon.className = 'fas fa-expand';
-            expandBtn.title = "Full Screen";
+            expandBtn.title = "เต็มหน้าจอ";
+
         }
     });
 
     // Global Error Handler for debugging on mobile/other devices
     window.onerror = function (message, source, lineno, colno, error) {
-        showToast(`Error: ${message}`, 'error');
+showToast(`ข้อผิดพลาด: ${message}`, 'error');
+
         console.error('Global Error:', error);
         return false;
     };
@@ -199,19 +207,22 @@ document.addEventListener('DOMContentLoaded', () => {
         roomPassword = passwordInput.value.trim();
 
         if (!myNickname) {
-            showToast('Please enter a nickname', 'error');
+showToast('กรุณาระบุชื่อเล่น', 'error');
+
             return;
         }
 
         if (!roomId) {
-            showToast('Please enter a room ID', 'error');
+showToast('กรุณาระบุรหัสห้อง', 'error');
+
             return;
         }
 
         // Set Loading State
         const originalText = joinBtn.innerHTML;
         joinBtn.disabled = true;
-        joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Joining...</span>';
+joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>กำลังเข้าร่วม...</span>';
+
 
         try {
             // Timeout race for getUserMedia
@@ -222,19 +233,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (result === 'timeout') {
                 console.warn('Media access timed out, proceeding as viewer');
-                showToast('Media access slow/failed. Joining as viewer.', 'info');
+showToast('การเข้าถึงสื่อล่าช้า/ล้มเหลว เข้าร่วมในฐานะผู้ชม', 'info');
+
                 // Force join without local stream
                 joinRoomSuccess(roomId);
             } else if (result) {
                 joinRoomSuccess(roomId);
             } else {
                 // startLocalStream returned false/null
-                showToast('Failed to initialize. Please try again.', 'error');
+showToast('การเริ่มต้นล้มเหลว โปรดลองอีกครั้ง', 'error');
+
                 resetJoinBtn(originalText);
             }
         } catch (err) {
             console.error('Join error:', err);
-            showToast('Error joining room: ' + err.message, 'error');
+showToast('เกิดข้อผิดพลาดในการเข้าร่วมห้อง: ' + err.message, 'error');
+
             resetJoinBtn(originalText);
         }
     });
@@ -260,27 +274,33 @@ document.addEventListener('DOMContentLoaded', () => {
     copyLinkBtn.addEventListener('click', () => {
         const link = window.location.href;
         navigator.clipboard.writeText(link).then(() => {
-            showToast('Link copied to clipboard!', 'success');
+showToast('คัดลอกลิงก์ไปยังคลิปบอร์ดแล้ว!', 'success');
         }).catch(err => {
-            showToast('Failed to copy link', 'error');
+            showToast('ไม่สามารถคัดลอกลิงก์ได้', 'error');
+
         });
     });
 
     // --- WebRTC Logic ---
 
     socket.on('error-message', (message) => {
-        showToast(message, 'error');
+let displayMessage = message;
+        if (message === 'Incorrect password') displayMessage = 'รหัสผ่านไม่ถูกต้อง';
+        showToast(displayMessage, 'error');
+
         if (message === 'Incorrect password') {
             joinScreen.style.display = 'flex';
             roomScreen.style.display = 'none';
             joinScreen.classList.add('active');
-            resetJoinBtn('<span>Join Room</span><i class="fas fa-arrow-right"></i>');
+resetJoinBtn('<span>เข้าร่วมห้อง</span><i class="fas fa-arrow-right"></i>');
+
         }
     });
 
     socket.on('user-connected', async (userId, nickname) => {
         console.log('User connected:', userId, nickname);
-        showToast(`${nickname || 'User'} connected`, 'info');
+showToast(`${nickname || 'ผู้ใช้'} เชื่อมต่อแล้ว`, 'info');
+
         remoteVideoWrapper.classList.remove('placeholder');
         if (waitingMessage) waitingMessage.style.display = 'none'; // Explicitly hide waiting message
         remoteVideoWrapper.classList.add('camera-off'); // Default to audio-only visual until video track arrives
@@ -288,8 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (localStream) {
             localStream.getTracks().forEach(track => {
-                const sender = peerConnection.addTrack(track, localStream);
-                if (track.kind === 'video') videoSender = sender;
+peerConnection.addTrack(track, localStream);
+
             });
         }
 
@@ -300,6 +320,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Adding existing screen track to new connection');
                 videoSender = peerConnection.addTrack(screenTrack, currentScreenStream);
             }
+const screenAudioTrack = currentScreenStream.getAudioTracks()[0];
+            if (screenAudioTrack) {
+                 console.log('Adding existing screen audio track to new connection');
+                 screenAudioSender = peerConnection.addTrack(screenAudioTrack, currentScreenStream);
+            }
+
         }
 
         try {
@@ -364,7 +390,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('user-disconnected', (userId, nickname) => {
         console.log('User disconnected');
-        showToast(`${nickname || 'User'} disconnected`, 'info');
+showToast(`${nickname || 'ผู้ใช้'} ตัดการเชื่อมต่อแล้ว`, 'info');
+
         if (peerConnection) {
             peerConnection.close();
             peerConnection = null;
@@ -376,7 +403,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Auto-reconnect Logic
     socket.on('disconnect', () => {
-        showToast('Disconnected. Attempting to reconnect...', 'error');
+showToast('ตัดการเชื่อมต่อแล้ว กำลังพยายามเชื่อมต่อใหม่...', 'error');
+
     });
 
     // Video Event Listeners for better UI state management
@@ -398,7 +426,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Socket.io Events
     socket.on('connect', () => {
         if (roomId && roomScreen.style.display !== 'none') {
-            showToast('Reconnected!', 'success');
+showToast('เชื่อมต่อใหม่สำเร็จ!', 'success');
+
             socket.emit('join-room', roomId, socket.id);
             // Might need to renegotiate if ICE failed, but simpler to just re-join for signaling
         }
@@ -420,20 +449,38 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Received remote track:', event.track.kind);
             const stream = event.streams[0];
 
-            // Force update srcObject if it's new or just to ensure it plays
-            if (remoteVideo.srcObject !== stream) {
+if (event.track.kind === 'video') {
+                // Force update srcObject for video
                 remoteVideo.srcObject = stream;
-                console.log('Assigned new stream to remote video');
-            }
-
-            remoteVideoWrapper.classList.remove('placeholder');
-            if (waitingMessage) waitingMessage.style.display = 'none'; // Explicitly hide waiting message
-
-            // Auto-detect video track and show video
-            if (event.track.kind === 'video') {
+                console.log('Assigned new video stream to remote video');
+                
+                remoteVideoWrapper.classList.remove('placeholder');
+                if (waitingMessage) waitingMessage.style.display = 'none'; // Explicitly hide waiting message
                 remoteVideoWrapper.classList.remove('camera-off');
                 // Ensure video plays
                 remoteVideo.play().catch(e => console.error('Error playing video:', e));
+            } else if (event.track.kind === 'audio') {
+                // Handle Audio Track
+                // If the stream is NOT the one currently in remoteVideo (which handles the main video/audio),
+                // or if remoteVideo has no stream yet, we might need to handle it.
+                // Simplest robust way: If it's a secondary audio track (like system audio while mic is on another stream), play it.
+                
+                if (remoteVideo.srcObject !== stream) {
+                    console.log('New audio stream detected (separate from video), creating audio element');
+                    const audio = document.createElement('audio');
+                    audio.srcObject = stream;
+                    audio.autoplay = true;
+                    // audio.controls = true; 
+                    // audio.style.display = 'none';
+                    document.body.appendChild(audio);
+
+                    // Cleanup when track ends
+                    event.track.onended = () => {
+                        console.log('Audio track ended, removing audio element');
+                        audio.remove();
+                    };
+                }
+
             }
         };
 
@@ -441,7 +488,8 @@ document.addEventListener('DOMContentLoaded', () => {
         peerConnection.oniceconnectionstatechange = () => {
             console.log('ICE State:', peerConnection.iceConnectionState);
             if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'failed') {
-                showToast('Connection unstable', 'error');
+showToast('การเชื่อมต่อไม่เสถียร', 'error');
+
                 // Optional: restartIce()
             }
         };
@@ -472,7 +520,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     micBtn.addEventListener('click', () => {
         if (!localStream) {
-            showToast('No microphone found', 'error');
+showToast('ไม่พบไมโครโฟน', 'error');
+
             return;
         }
         const audioTrack = localStream.getAudioTracks()[0];
@@ -497,7 +546,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 enabled: audioTrack.enabled
             });
         } else {
-            showToast('No microphone available', 'error');
+showToast('ไม่มีไมโครโฟนที่ใช้งานได้', 'error');
+
         }
     });
 
@@ -507,38 +557,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                showToast('Screen sharing is not supported on this device/browser.', 'error');
+showToast('อุปกรณ์/เบราว์เซอร์นี้ไม่รองรับการแชร์หน้าจอ', 'error');
                 return;
             }
 
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                video: true,
+                audio: true // Request system audio
+            });
             const screenTrack = screenStream.getVideoTracks()[0];
+            const screenAudioTrack = screenStream.getAudioTracks()[0]; // Get audio track if available
 
             // Replace video track in peer connection sender or Add track if not exists
             if (peerConnection) {
+                let renegotiationNeeded = false;
+
                 if (videoSender) {
-                    // Reuse existing sender
+                    // Reuse existing sender for video
                     await videoSender.replaceTrack(screenTrack);
                 } else {
-                    // Try to find an existing video sender that might have been created before
+                    // ... (existing logic for video sender finding)
                     const senders = peerConnection.getSenders();
                     const existingSender = senders.find(s => s.track && s.track.kind === 'video');
+                    
 
                     if (existingSender) {
                         videoSender = existingSender;
                         await videoSender.replaceTrack(screenTrack);
                     } else {
-                        // No video sender (audio only mode), so add track
-                        videoSender = peerConnection.addTrack(screenTrack, localStream || screenStream);
-
-                        // Renegotiate
-                        const offer = await peerConnection.createOffer();
-                        await peerConnection.setLocalDescription(offer);
-                        socket.emit('offer', { type: 'offer', sdp: offer, roomId: roomId });
+videoSender = peerConnection.addTrack(screenTrack, localStream || screenStream);
+                        renegotiationNeeded = true;
                     }
                 }
+
+                // Handle System Audio
+                if (screenAudioTrack) {
+                    console.log('Adding system audio track');
+                    if (screenAudioSender) {
+                         await screenAudioSender.replaceTrack(screenAudioTrack);
+                    } else {
+                        screenAudioSender = peerConnection.addTrack(screenAudioTrack, screenStream);
+                        renegotiationNeeded = true;
+                    }
+                }
+
+                if (renegotiationNeeded) {
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    socket.emit('offer', { type: 'offer', sdp: offer, roomId: roomId });
+                }
             } else {
-                showToast('Sharing screen (Waiting for peer to join)', 'info');
+                showToast('กำลังแชร์หน้าจอ (รอเพื่อนเข้าร่วม)', 'info');
+
             }
 
             // Update local video
@@ -594,6 +664,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     sender.replaceTrack(null).catch(e => console.error('Error stopping track:', e));
                 }
             }
+if (screenAudioSender) {
+                screenAudioSender.replaceTrack(null).catch(e => console.error('Error stopping audio track:', e));
+            }
+
         }
 
         // Clear local video
@@ -862,125 +936,42 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', resetHideTimer);
     document.addEventListener('keydown', resetHideTimer);
 
-    // 8. Video Quality Control & Enhanced Stats
-    const settingsBtn = document.getElementById('settings-btn');
-    const settingsMenu = document.getElementById('settings-menu');
-    const qualityBtns = document.querySelectorAll('.quality-btn');
-    const lossDisplay = document.getElementById('loss-display');
+// 7. Connection Status Monitor
+    const pingDisplay = document.getElementById('ping-display');
+    const statusDot = document.querySelector('.status-dot');
 
-    let currentQuality = 'auto';
 
-    settingsBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        settingsMenu.classList.toggle('active');
-        // Close other menus
-        if (typeof soundMenu !== 'undefined') soundMenu.classList.remove('show');
-        const reactionMenu = document.querySelector('.reaction-menu');
-        if (reactionMenu) reactionMenu.classList.remove('show');
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!settingsBtn.contains(e.target) && !settingsMenu.contains(e.target)) {
-            settingsMenu.classList.remove('active');
-        }
-    });
-
-    qualityBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            qualityBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentQuality = btn.dataset.quality;
-            setVideoQuality(currentQuality);
-            settingsMenu.classList.remove('active');
-            showToast(`Quality set to: ${btn.textContent}`, 'info');
-        });
-    });
-
-    async function setVideoQuality(quality) {
-        if (!videoSender) return;
-
-        try {
-            const params = videoSender.getParameters();
-            if (!params.encodings) params.encodings = [{}];
-
-            let maxBitrate = null;
-            // Bitrates: High=2.5Mbps, Medium=1Mbps, Low=300Kbps
-            switch (quality) {
-                case 'high': maxBitrate = 2500000; break;
-                case 'medium': maxBitrate = 1000000; break;
-                case 'low': maxBitrate = 300000; break;
-                case 'auto': maxBitrate = null; break; // Reset to default
-            }
-
-            params.encodings[0].maxBitrate = maxBitrate;
-            await videoSender.setParameters(params);
-            console.log('Video quality updated to:', quality);
-        } catch (err) {
-            console.error('Error setting quality:', err);
-        }
-    }
-
-    // Enhanced Stats Loop (Ping + Auto Quality)
     setInterval(async () => {
         if (!peerConnection || peerConnection.iceConnectionState !== 'connected') {
             pingDisplay.textContent = '(Offline)';
             statusDot.style.backgroundColor = '#666';
-            if (lossDisplay) lossDisplay.textContent = '0%';
+
             return;
         }
 
         try {
             const stats = await peerConnection.getStats();
             let rtt = null;
-            let packetsLost = 0;
+
 
             stats.forEach(report => {
                 if (report.type === 'candidate-pair' && report.state === 'succeeded') {
                     rtt = report.currentRoundTripTime;
                 }
-                // Check for remote inbound loss (packet loss perceived by other peer)
-                if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
-                    packetsLost = report.packetsLost;
-                }
-            });
+});
 
-            // Update Ping UI
+
             if (rtt !== null) {
                 const pingMs = Math.round(rtt * 1000);
                 pingDisplay.textContent = `(${pingMs}ms)`;
 
-                if (pingMs < 100) statusDot.style.backgroundColor = '#46d369';
-                else if (pingMs < 200) statusDot.style.backgroundColor = '#ffc107';
-                else statusDot.style.backgroundColor = '#e50914';
-
-                // Auto Quality Adjustment Logic
-                if (currentQuality === 'auto' && videoSender) {
-                    const params = videoSender.getParameters();
-                    if (!params.encodings) params.encodings = [{}];
-
-                    let targetBitrate = null; // Default (High/Unlimited)
-
-                    // If Ping is bad (>300ms), drop to Medium. If >500ms, drop to Low.
-                    if (pingMs > 500) {
-                        targetBitrate = 300000;
-                    } else if (pingMs > 300) {
-                        targetBitrate = 1000000;
-                    }
-
-                    // Only update if changed
-                    const currentMax = params.encodings[0].maxBitrate;
-                    if (currentMax !== targetBitrate) {
-                        params.encodings[0].maxBitrate = targetBitrate;
-                        videoSender.setParameters(params).catch(e => console.warn('Auto-quality failed', e));
-                        // Optional: showToast('Auto-adjusting video quality...', 'info');
-                    }
+if (pingMs < 100) {
+                    statusDot.style.backgroundColor = '#46d369'; // Green
+                } else if (pingMs < 200) {
+                    statusDot.style.backgroundColor = '#ffc107'; // Yellow
+                } else {
+                    statusDot.style.backgroundColor = '#e50914'; // Red
                 }
-            }
-
-            if (lossDisplay) {
-                // Just showing cumulative loss for now as a simple indicator
-                lossDisplay.textContent = packetsLost > 0 ? packetsLost + ' pkts' : '0%';
-                lossDisplay.style.color = packetsLost > 100 ? '#e50914' : '#b3b3b3';
             }
 
         } catch (err) {
