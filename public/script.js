@@ -542,6 +542,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function renegotiate(userId) {
+        const peer = peers[userId];
+        if (!peer || !peer.connection) return;
+
+        try {
+            const offer = await peer.connection.createOffer();
+            await peer.connection.setLocalDescription(offer);
+            socket.emit('offer', {
+                target: userId,
+                sdp: offer,
+                roomId: roomId,
+                callerId: socket.id
+            });
+        } catch (err) {
+            console.error('Error renegotiating:', err);
+        }
+    }
+
     // --- Socket Events ---
 
     socket.on('you-are-host', () => {
@@ -780,14 +798,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (videoTrack) cameraTrack = videoTrack;
         }
 
-        Object.values(peers).forEach(peer => {
+        Object.keys(peers).forEach(userId => {
+            const peer = peers[userId];
+            let needsRenegotiation = false;
+
             if (peer.videoSender) {
                 peer.videoSender.replaceTrack(cameraTrack).catch(e => console.error(e));
             }
             if (peer.screenAudioSender) {
-                peer.screenAudioSender.stop(); // Stop the sender? Or replace with null?
-                peer.connection.removeTrack(peer.screenAudioSender); // Better to remove?
+                try {
+                    peer.connection.removeTrack(peer.screenAudioSender);
+                } catch (e) { console.error(e); }
                 peer.screenAudioSender = null;
+                needsRenegotiation = true;
+            }
+
+            if (needsRenegotiation) {
+                renegotiate(userId);
             }
         });
 
