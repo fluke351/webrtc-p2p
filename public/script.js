@@ -33,9 +33,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Controls
     const micBtn = document.getElementById('mic-btn');
+    const cameraBtn = document.getElementById('camera-btn');
     const screenBtn = document.getElementById('screen-btn');
     const stopShareBtn = document.getElementById('stop-share-btn');
     const leaveBtn = document.getElementById('leave-btn');
+
+    // ... (rest of the code)
+
+    if (copyLinkBtn) {
+        copyLinkBtn.addEventListener('click', () => {
+            const url = window.location.href;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('คัดลอกตั๋วเชิญแล้ว!', 'success');
+            }).catch(err => {
+                console.error('Error copying link:', err);
+                showToast('ไม่สามารถคัดลอกได้', 'error');
+            });
+        });
+    }
 
     // Features
     const chatInput = document.getElementById('chat-input');
@@ -59,6 +74,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentScreenStream = null;
     let amIHost = false;
     let unreadCount = 0;
+    let isCameraOn = true;
+    let peerNicknames = {}; // userId -> nickname
+
+    // --- Lightweight Mode Config (เบาสบาย) ---
+    const MAX_VIDEO_SLOTS = 6; // จำกัด video แค่ 6 คน ที่เหลือ audio-only
+    const activeVideoUsers = new Set(); // เก็บ userId ที่กำลังแสดง video
 
     // --- WebRTC Config ---
     const rtcConfig = {
@@ -239,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 makeFeatured(localVideoWrapper);
             }
         } else {
-            icon.className = 'fas fa-rectangle-wide';
+            icon.className = 'fas fa-film';
             theaterModeBtn.title = "โหมดโรงหนัง";
             showToast('ออกจากโหมดโรงหนัง', 'info');
             document.querySelectorAll('.featured').forEach(el => el.classList.remove('featured'));
@@ -312,10 +333,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Mute local video to prevent feedback
                 localVideo.srcObject = localStream;
                 localVideo.muted = true;
+                
+                // Check initial video state
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (!videoTrack || !videoTrack.enabled) {
+                    localVideoWrapper.classList.add('camera-off');
+                    isCameraOn = false;
+                } else {
+                    localVideoWrapper.classList.remove('camera-off');
+                    isCameraOn = true;
+                }
+                
                 updateButtonStates();
             } else {
-                localVideoWrapper.classList.add('mic-off');
+                localVideoWrapper.classList.add('mic-off', 'camera-off');
                 micBtn.classList.add('inactive');
+                isCameraOn = false;
             }
 
             return true;
@@ -329,25 +362,57 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateButtonStates() {
         if (!localStream) {
             micBtn.classList.add('disabled');
+            cameraBtn.classList.add('disabled');
             localVideoWrapper.classList.add('mic-off');
             return;
         }
 
+        // Audio button state
         const audioTrack = localStream.getAudioTracks()[0];
         if (audioTrack) {
             micBtn.classList.remove('disabled');
             if (audioTrack.enabled) {
                 micBtn.classList.remove('inactive');
                 micBtn.classList.add('active');
-                localVideoWrapper.classList.remove('mic-off');
+                micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
             } else {
                 micBtn.classList.remove('active');
                 micBtn.classList.add('inactive');
-                localVideoWrapper.classList.add('mic-off');
+                micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
             }
         } else {
             micBtn.classList.add('disabled');
+        }
+
+        // Camera button state
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            cameraBtn.classList.remove('disabled');
+            if (videoTrack.enabled) {
+                cameraBtn.classList.remove('inactive');
+                cameraBtn.classList.add('active');
+                cameraBtn.innerHTML = '<i class="fas fa-video"></i>';
+            } else {
+                cameraBtn.classList.remove('active');
+                cameraBtn.classList.add('inactive');
+                cameraBtn.innerHTML = '<i class="fas fa-video-slash"></i>';
+            }
+        } else {
+            cameraBtn.classList.add('disabled');
+        }
+
+        // Update wrapper classes for visual indicators
+        if (audioTrack && !audioTrack.enabled) {
             localVideoWrapper.classList.add('mic-off');
+        } else {
+            localVideoWrapper.classList.remove('mic-off');
+        }
+        
+        // Update camera-off class based on video track state
+        if (videoTrack && !videoTrack.enabled) {
+            localVideoWrapper.classList.add('camera-off');
+        } else if (videoTrack) {
+            localVideoWrapper.classList.remove('camera-off');
         }
     }
 
@@ -451,6 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function addRemoteVideo(userId, stream) {
         if (peers[userId] && peers[userId].wrapper) return;
 
+        const nickname = peerNicknames[userId] || 'ผู้ชม';
         const wrapper = document.createElement('div');
         wrapper.className = 'video-wrapper remote placeholder';
         wrapper.id = `video-${userId}`;
@@ -471,8 +537,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="icon-btn expand-btn" title="เต็มหน้าจอ">
                 <i class="fas fa-expand"></i>
             </button>
+            <button class="icon-btn kick-btn" title="เตะออก" style="display: ${amIHost ? 'block' : 'none'}">
+                <i class="fas fa-user-times"></i>
+            </button>
             <div class="video-overlay">
-                <span class="user-label">ผู้ชม</span>
+                <span class="user-label">${nickname}</span>
+                <div class="network-indicator" title="กำลังวัดคุณภาพสัญญาณ..."></div>
                 <div class="volume-control">
                     <i class="fas fa-volume-up"></i>
                     <input type="range" min="0" max="1" step="0.1" value="1">
@@ -489,6 +559,16 @@ document.addEventListener('DOMContentLoaded', () => {
         volumeSlider.addEventListener('input', (e) => {
             video.volume = e.target.value;
         });
+
+        // Kick logic
+        const kickBtn = wrapper.querySelector('.kick-btn');
+        if (kickBtn) {
+            kickBtn.addEventListener('click', () => {
+                if (confirm(`คุณต้องการเตะ ${nickname} ออกใช่ไหม?`)) {
+                    socket.emit('kick-user', userId);
+                }
+            });
+        }
 
         // Expand/PiP buttons can be added here if needed per-video
         const pipBtn = wrapper.querySelector('.pip-btn');
@@ -569,6 +649,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.kick-btn').forEach(btn => btn.style.display = 'block');
     });
 
+    socket.on('existing-users', (users) => {
+        users.forEach(u => {
+            peerNicknames[u.id] = u.nickname;
+        });
+    });
+
     socket.on('kicked', () => {
         alert('คุณถูกเชิญออกจากห้องโดยเจ้าของห้อง');
         location.href = '/';
@@ -583,6 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('user-connected', async (userId, nickname) => {
         console.log('User connected:', userId, nickname);
         showToast(`${nickname || 'ผู้ชม'} เข้าโรงหนังแล้ว`, 'info');
+        peerNicknames[userId] = nickname;
 
         const pc = createPeerConnection(userId, true);
         try {
@@ -668,6 +755,32 @@ document.addEventListener('DOMContentLoaded', () => {
         removePeer(userId);
     });
 
+    socket.on('media-state-change', (payload) => {
+        const { userId, type, enabled } = payload;
+        const peer = peers[userId];
+        if (peer && peer.wrapper) {
+            if (type === 'video') {
+                if (enabled) {
+                    peer.wrapper.classList.remove('camera-off');
+                } else {
+                    peer.wrapper.classList.add('camera-off');
+                }
+            } else if (type === 'audio') {
+                const audioIndicator = peer.wrapper.querySelector('.audio-indicator i');
+                if (audioIndicator) {
+                    if (enabled) {
+                        audioIndicator.className = 'fas fa-microphone';
+                        peer.wrapper.classList.remove('mic-off');
+                    } else {
+                        audioIndicator.className = 'fas fa-microphone-slash';
+                        peer.wrapper.classList.add('mic-off');
+                    }
+                }
+            }
+        }
+        console.log(`User ${userId} media state changed - ${type}: ${enabled}`);
+    });
+
     socket.on('error-message', (message) => {
         let displayMessage = message;
         if (message === 'Incorrect password') displayMessage = 'รหัสผ่านไม่ถูกต้อง';
@@ -726,9 +839,40 @@ document.addEventListener('DOMContentLoaded', () => {
             // Notify others? (Optional visual indicator)
             socket.emit('media-state-change', {
                 roomId,
+                userId: socket.id,
                 type: 'audio',
                 enabled: audioTrack.enabled
             });
+        }
+    });
+
+    cameraBtn.addEventListener('click', () => {
+        if (!localStream) {
+            showToast('ไม่พบกล้อง', 'error');
+            return;
+        }
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            isCameraOn = videoTrack.enabled;
+            updateButtonStates(); // This now handles camera-off class
+
+            // Show toast notification
+            if (isCameraOn) {
+                showToast('เปิดกล้องแล้ว', 'info');
+            } else {
+                showToast('ปิดกล้องแล้ว', 'info');
+            }
+
+            // Notify others
+            socket.emit('media-state-change', {
+                roomId,
+                userId: socket.id,
+                type: 'video',
+                enabled: videoTrack.enabled
+            });
+        } else {
+            showToast('ไม่พบกล้องบนอุปกรณ์', 'error');
         }
     });
 

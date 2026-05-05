@@ -15,18 +15,29 @@ io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
     socket.on('join-room', (roomId, userId, nickname, password) => {
+        const MAX_USERS = 10; // จำกัดสูงสุด 10 คน
+        
         // Room Password Logic
         if (!rooms[roomId]) {
             // Create room (store password if provided)
             rooms[roomId] = {
                 password: password || null,
-                host: socket.id // First user is host
+                host: socket.id, // First user is host
+                userCount: 0
             };
         } else {
             // Check password
             if (rooms[roomId].password && rooms[roomId].password !== password) {
                 socket.emit('error-message', 'Incorrect password');
                 return; // Stop execution
+            }
+            
+            // Check user limit
+            const room = io.sockets.adapter.rooms.get(roomId);
+            const currentCount = room ? room.size : 0;
+            if (currentCount >= MAX_USERS) {
+                socket.emit('error-message', 'ห้องเต็มแล้ว (สูงสุด 10 คน)');
+                return;
             }
         }
 
@@ -36,9 +47,25 @@ io.on('connection', (socket) => {
         // Notify user if they are host
         if (rooms[roomId].host === socket.id) {
             socket.emit('you-are-host');
-        } else {
-            // Notify existing host about new user? (Optional)
         }
+
+        // Get list of users already in the room (to send their nicknames to the new user)
+        const otherUsers = [];
+        const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+        if (socketsInRoom) {
+            socketsInRoom.forEach(socketId => {
+                if (socketId !== socket.id) {
+                    const s = io.sockets.sockets.get(socketId);
+                    if (s && s.data) {
+                        otherUsers.push({
+                            id: socketId,
+                            nickname: s.data.nickname
+                        });
+                    }
+                }
+            });
+        }
+        socket.emit('existing-users', otherUsers);
 
         socket.to(roomId).emit('user-connected', userId, nickname);
 
