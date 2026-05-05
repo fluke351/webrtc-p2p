@@ -513,6 +513,85 @@ document.addEventListener('DOMContentLoaded', () => {
         return pc;
     }
 
+    // --- Video Controls Helper (PiP & Fullscreen) ---
+    function setupVideoControls(wrapper, video) {
+        const pipBtn = wrapper.querySelector('.pip-btn');
+        const expandBtn = wrapper.querySelector('.expand-btn');
+
+        if (pipBtn) {
+            pipBtn.addEventListener('click', async () => {
+                try {
+                    if (document.pictureInPictureElement) {
+                        await document.exitPictureInPicture();
+                    } else if (video.readyState !== 0) {
+                        await video.requestPictureInPicture();
+                    }
+                } catch (err) {
+                    console.error('PiP Error:', err);
+                }
+            });
+        }
+
+        if (expandBtn) {
+            expandBtn.addEventListener('click', async () => {
+                try {
+                    if (!document.fullscreenElement) {
+                        if (wrapper.requestFullscreen) {
+                            await wrapper.requestFullscreen();
+                        } else if (wrapper.webkitRequestFullscreen) {
+                            await wrapper.webkitRequestFullscreen();
+                        }
+                    } else {
+                        if (document.exitFullscreen) {
+                            await document.exitFullscreen();
+                        }
+                    }
+                } catch (err) {
+                    console.error('Fullscreen Error:', err);
+                }
+            });
+        }
+
+        // Listen for fullscreen change to update icons
+        document.addEventListener('fullscreenchange', () => {
+            const isFullscreen = document.fullscreenElement === wrapper;
+            if (expandBtn) {
+                const icon = expandBtn.querySelector('i');
+                if (isFullscreen) {
+                    wrapper.classList.add('is-fullscreen');
+                    icon.className = 'fas fa-compress';
+                    expandBtn.title = "ออกจากเต็มหน้าจอ";
+                } else if (document.fullscreenElement === null) {
+                    // Only remove if NO element is in fullscreen or if we want per-wrapper check
+                    // Actually, it's safer to check if THIS wrapper is NOT the fullscreen element
+                    if (document.fullscreenElement !== wrapper) {
+                        wrapper.classList.remove('is-fullscreen');
+                        icon.className = 'fas fa-expand';
+                        expandBtn.title = "เต็มหน้าจอ";
+                    }
+                }
+            }
+        });
+        
+        // Handle webkit specific events if needed
+        document.addEventListener('webkitfullscreenchange', () => {
+            const isFullscreen = document.webkitFullscreenElement === wrapper;
+            if (expandBtn) {
+                const icon = expandBtn.querySelector('i');
+                if (isFullscreen) {
+                    wrapper.classList.add('is-fullscreen');
+                    icon.className = 'fas fa-compress';
+                } else if (document.webkitFullscreenElement !== wrapper) {
+                    wrapper.classList.remove('is-fullscreen');
+                    icon.className = 'fas fa-expand';
+                }
+            }
+        });
+    }
+
+    // Initialize Local Video Controls
+    setupVideoControls(localVideoWrapper, localVideo);
+
     function addRemoteVideo(userId, stream) {
         if (peers[userId] && peers[userId].wrapper) return;
 
@@ -570,37 +649,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Expand/PiP buttons can be added here if needed per-video
-        const pipBtn = wrapper.querySelector('.pip-btn');
-        const expandBtn = wrapper.querySelector('.expand-btn');
-
-        if (pipBtn) {
-            pipBtn.addEventListener('click', async () => {
-                try {
-                    if (document.pictureInPictureElement) {
-                        await document.exitPictureInPicture();
-                    } else if (video.readyState !== 0) {
-                        await video.requestPictureInPicture();
-                    }
-                } catch (err) {
-                    console.error('PiP Error:', err);
-                }
-            });
-        }
-
-        if (expandBtn) {
-            expandBtn.addEventListener('click', () => {
-                wrapper.classList.toggle('expanded');
-                const icon = expandBtn.querySelector('i');
-                if (wrapper.classList.contains('expanded')) {
-                    icon.className = 'fas fa-compress';
-                    expandBtn.title = "ออกจากเต็มหน้าจอ";
-                } else {
-                    icon.className = 'fas fa-expand';
-                    expandBtn.title = "เต็มหน้าจอ";
-                }
-            });
-        }
+        // Setup PiP and Fullscreen
+        setupVideoControls(wrapper, video);
 
         videoGrid.appendChild(wrapper);
 

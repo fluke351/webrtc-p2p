@@ -622,6 +622,35 @@ video {
 }
 
 /* Video Overlays */
+.video-wrapper.is-fullscreen {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 0;
+    border: none;
+}
+
+.video-wrapper.is-fullscreen video {
+    object-fit: contain; /* Fullscreen immersion */
+    background: #000;
+}
+
+.video-wrapper.is-fullscreen .video-overlay {
+    bottom: 20px;
+    left: 20px;
+    width: auto;
+    background: rgba(0,0,0,0.5);
+}
+
+.video-wrapper.is-fullscreen .icon-btn {
+    opacity: 0.3; /* Keep visible but subtle in fullscreen */
+}
+
+.video-wrapper.is-fullscreen:hover .icon-btn {
+    opacity: 1;
+}
+
 .video-overlay {
     position: absolute;
     bottom: 10px;
